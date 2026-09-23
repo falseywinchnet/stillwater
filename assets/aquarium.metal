@@ -290,6 +290,17 @@ float3 fish_skin(Out in) {
     if(part<9.5f) return float3(0.036f,0.020f,0.018f);
     return float3(0.175f,0.168f,0.132f);
 }
+// Analytic UV height gradient avoids differentiating a screen-dependent fade.
+// The cap keeps tiny or foreshortened leaves from becoming faceted highlights.
+float3 leaf_relief_normal(float3 normal,float3 world,float2 uv,float2 height_gradient,bool front) {
+    float3 dx=dfdx(world),dy=dfdy(world),rx=cross(dy,normal),ry=cross(normal,dx);
+    float determinant=dot(dx,rx);
+    if(abs(determinant)<1e-12f) return normal;
+    float2 gradient=front ? height_gradient : -height_gradient;
+    float3 slope=(dot(gradient,dfdx(uv))*rx+dot(gradient,dfdy(uv))*ry)/determinant;
+    slope*=min(1.0f,0.18f*rsqrt(max(dot(slope,slope),1e-12f)));
+    return normalize(normal-slope);
+}
 struct Surface { float3 normal; float3 albedo; float alpha; float ambient_access; };
 Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_normal,
  texture2d<float> rock,texture2d<float> rock_normal,texture2d<float> wood,
@@ -318,10 +329,31 @@ Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_no
     }
     if(material==10) {
         float2 leaf=in.uv.xy;
-        float edge=pow(abs(leaf.x-0.5f)*2,5.0f);
-        float midrib=(1-smoothstep(0.008f,0.035f,abs(leaf.x-0.5f)))*(1-smoothstep(0.02f,0.06f,fwidth(leaf.x)));
-        float veins=pow(0.5f+0.5f*cos((leaf.y-abs(leaf.x-0.5f)*0.32f)*155),22.0f);
-        albedo*=(0.965f+0.035f*sin(leaf.y*64+sin(leaf.x*25)))*(1-0.09f*edge+0.12f*veins);
+        float across=leaf.x-0.5f;
+        float edge=pow(abs(across)*2,5.0f);
+        float rib_fade=1-smoothstep(0.02f,0.06f,fwidth(leaf.x));
+        float midrib=(1-smoothstep(0.008f,0.035f,abs(across)))*rib_fade;
+        float phase=(leaf.y-abs(across)*0.32f)*155;
+        // The narrow vein profile needs several pixels per period. Unresolved
+        // color converges to its mean; unresolved relief converges to flat.
+        float vein_fade=1-smoothstep(0.08f,0.24f,fwidth(phase)/6.283185f);
+        float crest=0.5f+0.5f*cos(phase);
+        float vein=pow(crest,16.0f);
+        float veins=mix(0.139949934f,vein,vein_fade);
+        float rib_height=exp(-across*across*3600)*0.0012f*rib_fade;
+        float vein_slope=-8*sin(phase)*pow(crest,15.0f)*0.00018f*vein_fade;
+        float2 height_gradient=float2(-7200*across*rib_height,0)+
+            vein_slope*155*float2(-0.32f*sign(across),1);
+        normal=leaf_relief_normal(normal,in.world,leaf,height_gradient,front);
+        // Stable leaf coordinates and object seed: pigment moves with the blade,
+        // never through world-space noise or a time-varying random field.
+        float seed=fract(float(in.identity)*0.618033989f)*6.283185f;
+        float patch_phase=dot(leaf,float2(11,17))+seed;
+        float cross_phase=dot(leaf,float2(-19,7))+seed*1.7f;
+        float patch_fade=1-smoothstep(0.6f,2.0f,max(fwidth(patch_phase),fwidth(cross_phase)));
+        float patch=sin(patch_phase)*sin(cross_phase)*patch_fade;
+        float3 pigment=float3(1)+patch*float3(0.055f,0.025f,-0.025f);
+        albedo*=pigment*0.965f*(1-0.09f*edge+0.12f*veins);
         albedo=mix(albedo,albedo*1.22f+float3(0.008f,0.012f,0),midrib*0.6f);
         if(!front) albedo*=float3(0.82f,0.76f,0.66f);
         if(in.surface.y>=0.7f) alpha=edge>0.45f ? 0.5f : 0.75f;
