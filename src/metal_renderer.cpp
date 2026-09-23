@@ -60,6 +60,43 @@ std::string error_text(id error) {
     const char* message = send<const char*>(send<id>(error, "localizedDescription"), "UTF8String");
     return message == nullptr ? "Metal error" : message;
 }
+bool decode_material(const std::string& path, std::vector<unsigned char>& pixels,
+                     std::size_t& width, std::size_t& height) {
+    CFURLRef url = CFURLCreateFromFileSystemRepresentation(
+        nullptr, reinterpret_cast<const UInt8*>(path.c_str()), static_cast<CFIndex>(path.size()),
+        false);
+    CGImageSourceRef source = url == nullptr ? nullptr : CGImageSourceCreateWithURL(url, nullptr);
+    if (url != nullptr)
+        CFRelease(url);
+    if (source == nullptr)
+        return false;
+    CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, nullptr);
+    CFRelease(source);
+    if (image == nullptr)
+        return false;
+    width = CGImageGetWidth(image);
+    height = CGImageGetHeight(image);
+    if (width == 0 || height == 0 || width > 4096 || height > 4096) {
+        CGImageRelease(image);
+        return false;
+    }
+    pixels.resize(width * height * 4);
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context =
+        CGBitmapContextCreate(pixels.data(), width, height, 8, width * 4, space,
+                              static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedLast) |
+                                  static_cast<CGBitmapInfo>(kCGBitmapByteOrder32Big));
+    CGColorSpaceRelease(space);
+    if (context == nullptr) {
+        CGImageRelease(image);
+        return false;
+    }
+    CGContextDrawImage(
+        context, CGRectMake(0, 0, static_cast<double>(width), static_cast<double>(height)), image);
+    CGContextRelease(context);
+    CGImageRelease(image);
+    return true;
+}
 bool save_png(id texture, id queue, unsigned int width, unsigned int height, const char* path) {
     const std::size_t stride = (static_cast<std::size_t>(width) * 4 + 255) & ~std::size_t(255);
     id device = send<id>(queue, "device");
@@ -562,9 +599,16 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         "rock_boulder_dry_diff.jpg", "rock_boulder_dry_nor_gl.jpg",
         "rough_wood_diff.jpg",       "rough_wood_nor_gl.jpg"};
     for (std::size_t index = 0; index < names.size(); ++index) {
-        materials_[index] = load_material(root + names[index], index % 2 == 0);
+        std::string occlusion_path;
+        if (index == 3)
+            occlusion_path = root + "rock_boulder_dry_ao.jpg";
+        if (index == 5)
+            occlusion_path = root + "rough_wood_ao.jpg";
+        materials_[index] = load_material(root + names[index], index % 2 == 0, occlusion_path);
         if (materials_[index] == nil) {
             error_ = "Cannot load material " + root + names[index];
+            if (!occlusion_path.empty())
+                error_ += " with ambient-occlusion map " + occlusion_path;
             return false;
         }
     }
@@ -582,39 +626,22 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     }
     return true;
 }
-id Renderer::load_material(const std::string& path, bool srgb) {
-    CFURLRef url = CFURLCreateFromFileSystemRepresentation(
-        nullptr, reinterpret_cast<const UInt8*>(path.c_str()), static_cast<CFIndex>(path.size()),
-        false);
-    CGImageSourceRef source = url == nullptr ? nullptr : CGImageSourceCreateWithURL(url, nullptr);
-    if (url != nullptr)
-        CFRelease(url);
-    if (source == nullptr)
+id Renderer::load_material(const std::string& path, bool srgb, const std::string& occlusion_path) {
+    std::vector<unsigned char> pixels;
+    std::size_t width{}, height{};
+    if (!decode_material(path, pixels, width, height))
         return nil;
-    CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, nullptr);
-    CFRelease(source);
-    if (image == nullptr)
-        return nil;
-    const std::size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image);
-    if (width == 0 || height == 0 || width > 4096 || height > 4096) {
-        CGImageRelease(image);
-        return nil;
+    if (!occlusion_path.empty()) {
+        std::vector<unsigned char> occlusion;
+        std::size_t occlusion_width{}, occlusion_height{};
+        if (!decode_material(occlusion_path, occlusion, occlusion_width, occlusion_height) ||
+            occlusion_width != width || occlusion_height != height)
+            return nil;
+        // Pack after decoding: alpha is material data, never premultiply the normal.
+        // The matching source maps use the same UVs and bitmap orientation.
+        for (std::size_t offset = 0; offset < pixels.size(); offset += 4)
+            pixels[offset + 3] = occlusion[offset];
     }
-    std::vector<unsigned char> pixels(width * height * 4);
-    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGContextRef context =
-        CGBitmapContextCreate(pixels.data(), width, height, 8, width * 4, space,
-                              static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedLast) |
-                                  static_cast<CGBitmapInfo>(kCGBitmapByteOrder32Big));
-    CGColorSpaceRelease(space);
-    if (context == nullptr) {
-        CGImageRelease(image);
-        return nil;
-    }
-    CGContextDrawImage(
-        context, CGRectMake(0, 0, static_cast<double>(width), static_cast<double>(height)), image);
-    CGContextRelease(context);
-    CGImageRelease(image);
     id descriptor =
         send<id>(type("MTLTextureDescriptor"),
                  "texture2DDescriptorWithPixelFormat:width:height:mipmapped:", srgb ? 71UL : 70UL,

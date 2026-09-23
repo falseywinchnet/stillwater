@@ -290,7 +290,7 @@ float3 fish_skin(Out in) {
     if(part<9.5f) return float3(0.036f,0.020f,0.018f);
     return float3(0.175f,0.168f,0.132f);
 }
-struct Surface { float3 normal; float3 albedo; float alpha; };
+struct Surface { float3 normal; float3 albedo; float alpha; float ambient_access; };
 Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_normal,
  texture2d<float> rock,texture2d<float> rock_normal,texture2d<float> wood,
  texture2d<float> wood_normal,bool front) {
@@ -298,13 +298,17 @@ Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_no
     int material=int(in.behavior.x+0.5f);
     float3 normal=normalize(front ? in.normal : -in.normal),albedo=in.color.rgb;
     float2 uv=in.uv.xy*in.behavior.yz;
-    float3 detail=float3(0.5f,0.5f,1);
+    float4 detail=float4(0.5f,0.5f,1,1);
+    float ambient_access=1;
     float alpha=1;
-    if(material==7) { albedo*=sand.sample(surface_sampler,uv).rgb;detail=sand_normal.sample(surface_sampler,uv).rgb; }
-    if(material==8) { albedo*=rock.sample(surface_sampler,uv).rgb;detail=rock_normal.sample(surface_sampler,uv).rgb; }
-    if(material==9) { albedo*=wood.sample(surface_sampler,uv).rgb;detail=wood_normal.sample(surface_sampler,uv).rgb; }
+    if(material==7) { albedo*=sand.sample(surface_sampler,uv).rgb;detail=sand_normal.sample(surface_sampler,uv); }
+    if(material==8) { albedo*=rock.sample(surface_sampler,uv).rgb;detail=rock_normal.sample(surface_sampler,uv); }
+    if(material==9) { albedo*=wood.sample(surface_sampler,uv).rgb;detail=wood_normal.sample(surface_sampler,uv); }
     if(material>=7 && material<=9) {
-        normal=mapped_normal(normal,in.world,uv,detail,material==7 ? 0.32f : 0.8f);
+        normal=mapped_normal(normal,in.world,uv,detail.rgb,material==7 ? 0.32f : 0.8f);
+        // Matching CC0 cavity maps affect only ambient illumination. Their data
+        // shares the normal-map sample and is retained in the existing base term.
+        if(material==8 || material==9) ambient_access=mix(1.0f,detail.a,0.45f);
         float fine=noise(in.world*9)*0.6f+noise(in.world*27)*0.4f;
         float moss=smoothstep(0.07f,0.5f,in.surface.x+(fine-0.5f)*0.45f);
         float3 film=material==7 ? float3(0.10f,0.10f,0.02f) : float3(0.03f,0.055f,0.007f);
@@ -334,7 +338,7 @@ Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_no
     }
     if(material==12) alpha=clamp(mix(0.90f,0.25f,smoothstep(0.06f,1.0f,in.uv.y))*
         (1+fin_pigment(in)*0.65f+fin_ribs(in)*0.3f),0.15f,1.0f);
-    return {normal,albedo,alpha};
+    return {normal,albedo,alpha,ambient_access};
 }
 struct LightingTerms { float3 base; float3 surface; float direct; float caustic; };
 LightingTerms fixed_lighting(Out in,Surface surface,constant Uniforms& u) {
@@ -342,6 +346,7 @@ LightingTerms fixed_lighting(Out in,Surface surface,constant Uniforms& u) {
     float3 light=normalize(float3(0,0.9138f,0.4061f));
     float3 hemisphere=mix(float3(0.025f,0.024f,0.020f),float3(0.10f,0.145f,0.12f),n.y*0.5f+0.5f);
     float3 base=albedo*hemisphere+albedo*float3(0.06f,0.085f,0.10f)*max(0.0f,dot(n,normalize(float3(1,5,10))));
+    base*=surface.ambient_access;
     float direct=max(0.0f,dot(n,light));
     int material=int(in.behavior.x+0.5f);
     float caustic=material>=7 && material<=9 ? max(n.y,0.0f) : 0.0f;

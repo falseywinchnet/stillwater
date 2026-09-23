@@ -67,7 +67,7 @@ class Renderer final {
     }
 
   private:
-    id load_material(const std::string& path, bool srgb);
+    id load_material(const std::string& path, bool srgb, const std::string& occlusion_path);
     void upload_actors(const Scene& scene);
     bool upload_edits(id command, const Scene& scene);
     id make_texture(unsigned long format, unsigned int width, unsigned int height,

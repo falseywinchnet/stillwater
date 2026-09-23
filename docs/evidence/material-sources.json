@@ -1,0 +1,26 @@
+{
+  "rough_wood": {
+    "source_page": "https://polyhaven.com/a/rough_wood",
+    "license": "CC0",
+    "download_date": "2026-09-23",
+    "ao": {
+      "size": 392089,
+      "md5": "fdb7dcb187ae535d6a5331fb91b9342f",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rough_wood/rough_wood_ao_1k.jpg"
+    },
+    "existing_diffuse_provider_md5": "92d4b3dd46bab95248f5a7680b7882e7",
+    "existing_normal_provider_md5": "1c9829c9023f74c74eaeba28e56e5144"
+  },
+  "rock_boulder_dry": {
+    "source_page": "https://polyhaven.com/a/rock_boulder_dry",
+    "license": "CC0",
+    "download_date": "2026-09-23",
+    "ao": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_boulder_dry/rock_boulder_dry_ao_1k.jpg",
+      "size": 532861,
+      "md5": "2feb57a8cbb3ee0c5d82df9476c5718c"
+    },
+    "existing_diffuse_provider_md5": "da794cd9be3db91e3160cf081109f322",
+    "existing_normal_provider_md5": "6f1c575ceed560ae253f65518cf748e2"
+  }
+}

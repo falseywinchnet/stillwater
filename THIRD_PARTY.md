@@ -35,7 +35,7 @@ The full notice is in `assets/licenses/THREE-MIT.txt` and
 
 ## Poly Haven materials
 
-The six JPEG files under `assets/materials/` were copied without alteration from
+The six diffuse/normal JPEG files under `assets/materials/` were copied without alteration from
 the pinned Desktop Habitats Riverscape assets. They contain diffuse/albedo and
 OpenGL normal maps for:
 
@@ -47,5 +47,11 @@ Poly Haven makes its assets available under CC0:
 https://polyhaven.com/license and https://creativecommons.org/publicdomain/zero/1.0/.
 The original upstream README identifies these exact texture sources.
 Asset SHA-256 hashes are recorded in `assets/SHA256SUMS`.
+
+The matching 1K ambient-occlusion maps for Rough Wood and Rock Boulder Dry were
+downloaded directly from Poly Haven on 2026-09-23, also under CC0. They remain
+unaltered JPEGs on disk. The loader packs their grayscale values into the unused
+alpha channels of the normal-map textures. Download URLs and provider checksums
+are preserved in `docs/evidence/material-sources.json`.
 
 No imagegen imagery, textures, sprites or source objects are included.
