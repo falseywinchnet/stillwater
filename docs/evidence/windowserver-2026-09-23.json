@@ -1,0 +1,705 @@
+{
+  "date": "2026-09-23",
+  "os": "macOS 26.6.1 (25G76)",
+  "hardware": "A18 Pro MacBook Neo, internal 2408x1506 panel",
+  "base_commit": "bfc2fd0",
+  "method": "Sequential exploratory 12-15 second windows. CPU from WindowServer ps cumulative-time delta; whole-device GPU from IOAccelerator PerformanceStatistics each second. Other applications/user activity uncontrolled. Launch windows include startup. These are not matched idle-desktop benchmarks.",
+  "app_initial_state": "not running",
+  "app_final_state": "not running",
+  "runtime": {
+    "window_opaque": true,
+    "view_opaque": false,
+    "metal_layer_opaque": true,
+    "backing_scale": 2,
+    "layer_contents_scale": 1,
+    "window_points": [
+      1408,
+      881
+    ],
+    "framebuffer_only": false,
+    "display_sync": true,
+    "presents_with_transaction": false
+  },
+  "runs": [
+    {
+      "name": "stopped-1",
+      "wall_seconds": 12.404929041978903,
+      "windowserver_cpu_percent_one_core": 46.11070309748969,
+      "whole_device_gpu_samples": [
+        {
+          "Tiler Utilization %": 6,
+          "Renderer Utilization %": 17,
+          "Device Utilization %": 17
+        },
+        {
+          "Tiler Utilization %": 6,
+          "Renderer Utilization %": 21,
+          "Device Utilization %": 21
+        },
+        {
+          "Tiler Utilization %": 7,
+          "Renderer Utilization %": 20,
+          "Device Utilization %": 20
+        },
+        {
+          "Tiler Utilization %": 7,
+          "Renderer Utilization %": 18,
+          "Device Utilization %": 19
+        },
+        {
+          "Tiler Utilization %": 7,
+          "Renderer Utilization %": 18,
+          "Device Utilization %": 18
+        },
+        {
+          "Tiler Utilization %": 6,
+          "Renderer Utilization %": 14,
+          "Device Utilization %": 14
+        },
+        {
+          "Tiler Utilization %": 6,
+          "Renderer Utilization %": 16,
+          "Device Utilization %": 16
+        },
+        {
+          "Tiler Utilization %": 6,
+          "Renderer Utilization %": 15,
+          "Device Utilization %": 15
+        },
+        {
+          "Tiler Utilization %": 10,
+          "Renderer Utilization %": 24,
+          "Device Utilization %": 24
+        },
+        {
+          "Tiler Utilization %": 7,
+          "Renderer Utilization %": 21,
+          "Device Utilization %": 21
+        },
+        {
+          "Tiler Utilization %": 7,
+          "Renderer Utilization %": 21,
+          "Device Utilization %": 21
+        },
+        {
+          "Tiler Utilization %": 10,
+          "Renderer Utilization %": 29,
+          "Device Utilization %": 30
+        }
+      ],
+      "whole_device_gpu_mean": 19.666666666666668
+    },
+    {
+      "name": "paused-1",
+      "wall_seconds": 12.609177542035468,
+      "windowserver_cpu_percent_one_core": 41.6363397414143,
+      "whole_device_gpu_samples": [
+        {
+          "Tiler Utilization %": 12,
+          "Renderer Utilization %": 24,
+          "Device Utilization %": 24
+        },
+        {
+          "Tiler Utilization %": 8,
+          "Renderer Utilization %": 20,
+          "Device Utilization %": 20
+        },
+        {
+          "Tiler Utilization %": 8,
+          "Renderer Utilization %": 16,
+          "Device Utilization %": 16
+        },
+        {
+          "Tiler Utilization %": 6,
+          "Renderer Utilization %": 16,
+          "Device Utilization %": 16
+        },
+        {
+          "Tiler Utilization %": 8,
+          "Renderer Utilization %": 13,
+          "Device Utilization %": 14
+        },
+        {
+          "Tiler Utilization %": 10,
+          "Renderer Utilization %": 17,
+          "Device Utilization %": 17
+        },
+        {
+          "Tiler Utilization %": 7,
+          "Renderer Utilization %": 18,
+          "Device Utilization %": 18
+        },
+        {
+          "Tiler Utilization %": 15,
+          "Renderer Utilization %": 25,
+          "Device Utilization %": 25
+        },
+        {
+          "Tiler Utilization %": 7,
+          "Renderer Utilization %": 22,
+          "Device Utilization %": 22
+        },
+        {
+          "Tiler Utilization %": 4,
+          "Renderer Utilization %": 14,
+          "Device Utilization %": 14
+        },
+        {
+          "Tiler Utilization %": 4,
+          "Renderer Utilization %": 13,
+          "Device Utilization %": 13
+        },
+        {
+          "Tiler Utilization %": 4,
+          "Renderer Utilization %": 13,
+          "Device Utilization %": 14
+        }
+      ],
+      "whole_device_gpu_mean": 17.75
+    },
+    {
+      "name": "animated-24-1",
+      "wall_seconds": 15.484157540951855,
+      "windowserver_cpu_percent_one_core": 42.624211117398,
+      "whole_device_gpu_samples": [
+        {
+          "Tiler Utilization %": 9,
+          "Renderer Utilization %": 38,
+          "Device Utilization %": 38
+        },
+        {
+          "Tiler Utilization %": 40,
+          "Renderer Utilization %": 66,
+          "Device Utilization %": 66
+        },
+        {
+          "Tiler Utilization %": 52,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 46,
+          "Renderer Utilization %": 82,
+          "Device Utilization %": 83
+        },
+        {
+          "Tiler Utilization %": 49,
+          "Renderer Utilization %": 83,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 49,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 42,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 55,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 58,
+          "Renderer Utilization %": 83,
+          "Device Utilization %": 83
+        },
+        {
+          "Tiler Utilization %": 57,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 59,
+          "Renderer Utilization %": 83,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 69,
+          "Renderer Utilization %": 88,
+          "Device Utilization %": 88
+        },
+        {
+          "Tiler Utilization %": 76,
+          "Renderer Utilization %": 88,
+          "Device Utilization %": 88
+        },
+        {
+          "Tiler Utilization %": 78,
+          "Renderer Utilization %": 86,
+          "Device Utilization %": 87
+        },
+        {
+          "Tiler Utilization %": 70,
+          "Renderer Utilization %": 87,
+          "Device Utilization %": 87
+        }
+      ],
+      "whole_device_gpu_mean": 80.73333333333333
+    },
+    {
+      "name": "frozen-present-24",
+      "wall_seconds": 15.466322500025854,
+      "windowserver_cpu_percent_one_core": 33.88006424915766,
+      "whole_device_gpu_samples": [
+        {
+          "Tiler Utilization %": 26,
+          "Renderer Utilization %": 52,
+          "Device Utilization %": 52
+        },
+        {
+          "Tiler Utilization %": 21,
+          "Renderer Utilization %": 44,
+          "Device Utilization %": 44
+        },
+        {
+          "Tiler Utilization %": 73,
+          "Renderer Utilization %": 72,
+          "Device Utilization %": 83
+        },
+        {
+          "Tiler Utilization %": 72,
+          "Renderer Utilization %": 86,
+          "Device Utilization %": 86
+        },
+        {
+          "Tiler Utilization %": 73,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 77,
+          "Renderer Utilization %": 81,
+          "Device Utilization %": 82
+        },
+        {
+          "Tiler Utilization %": 80,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 82,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 82,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 81,
+          "Renderer Utilization %": 83,
+          "Device Utilization %": 83
+        },
+        {
+          "Tiler Utilization %": 84,
+          "Renderer Utilization %": 86,
+          "Device Utilization %": 86
+        },
+        {
+          "Tiler Utilization %": 83,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 0,
+          "Renderer Utilization %": 0,
+          "Device Utilization %": 0
+        },
+        {
+          "Tiler Utilization %": 86,
+          "Renderer Utilization %": 88,
+          "Device Utilization %": 88
+        },
+        {
+          "Tiler Utilization %": 87,
+          "Renderer Utilization %": 89,
+          "Device Utilization %": 89
+        }
+      ],
+      "whole_device_gpu_mean": 74.33333333333333
+    },
+    {
+      "name": "frozen-opaque-24",
+      "wall_seconds": 15.610588874900714,
+      "windowserver_cpu_percent_one_core": 28.378173530120534,
+      "whole_device_gpu_samples": [
+        {
+          "Tiler Utilization %": 24,
+          "Renderer Utilization %": 50,
+          "Device Utilization %": 50
+        },
+        {
+          "Tiler Utilization %": 69,
+          "Renderer Utilization %": 71,
+          "Device Utilization %": 91
+        },
+        {
+          "Tiler Utilization %": 75,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 83,
+          "Renderer Utilization %": 86,
+          "Device Utilization %": 86
+        },
+        {
+          "Tiler Utilization %": 82,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 82,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 74,
+          "Renderer Utilization %": 81,
+          "Device Utilization %": 87
+        },
+        {
+          "Tiler Utilization %": 79,
+          "Renderer Utilization %": 94,
+          "Device Utilization %": 94
+        },
+        {
+          "Tiler Utilization %": 72,
+          "Renderer Utilization %": 93,
+          "Device Utilization %": 93
+        },
+        {
+          "Tiler Utilization %": 88,
+          "Renderer Utilization %": 92,
+          "Device Utilization %": 92
+        },
+        {
+          "Tiler Utilization %": 86,
+          "Renderer Utilization %": 90,
+          "Device Utilization %": 90
+        },
+        {
+          "Tiler Utilization %": 86,
+          "Renderer Utilization %": 91,
+          "Device Utilization %": 91
+        },
+        {
+          "Tiler Utilization %": 86,
+          "Renderer Utilization %": 91,
+          "Device Utilization %": 91
+        },
+        {
+          "Tiler Utilization %": 68,
+          "Renderer Utilization %": 93,
+          "Device Utilization %": 93
+        },
+        {
+          "Tiler Utilization %": 73,
+          "Renderer Utilization %": 94,
+          "Device Utilization %": 94
+        }
+      ],
+      "whole_device_gpu_mean": 87
+    },
+    {
+      "name": "frozen-present-12",
+      "wall_seconds": 15.522957084001973,
+      "windowserver_cpu_percent_one_core": 41.55136141334204,
+      "whole_device_gpu_samples": [
+        {
+          "Tiler Utilization %": 51,
+          "Renderer Utilization %": 66,
+          "Device Utilization %": 66
+        },
+        {
+          "Tiler Utilization %": 45,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 86
+        },
+        {
+          "Tiler Utilization %": 48,
+          "Renderer Utilization %": 78,
+          "Device Utilization %": 78
+        },
+        {
+          "Tiler Utilization %": 65,
+          "Renderer Utilization %": 74,
+          "Device Utilization %": 74
+        },
+        {
+          "Tiler Utilization %": 77,
+          "Renderer Utilization %": 83,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 76,
+          "Renderer Utilization %": 82,
+          "Device Utilization %": 82
+        },
+        {
+          "Tiler Utilization %": 70,
+          "Renderer Utilization %": 75,
+          "Device Utilization %": 75
+        },
+        {
+          "Tiler Utilization %": 75,
+          "Renderer Utilization %": 80,
+          "Device Utilization %": 80
+        },
+        {
+          "Tiler Utilization %": 73,
+          "Renderer Utilization %": 76,
+          "Device Utilization %": 76
+        },
+        {
+          "Tiler Utilization %": 73,
+          "Renderer Utilization %": 77,
+          "Device Utilization %": 77
+        },
+        {
+          "Tiler Utilization %": 74,
+          "Renderer Utilization %": 80,
+          "Device Utilization %": 80
+        },
+        {
+          "Tiler Utilization %": 75,
+          "Renderer Utilization %": 81,
+          "Device Utilization %": 81
+        },
+        {
+          "Tiler Utilization %": 74,
+          "Renderer Utilization %": 80,
+          "Device Utilization %": 80
+        },
+        {
+          "Tiler Utilization %": 78,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 69,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        }
+      ],
+      "whole_device_gpu_mean": 79.13333333333334
+    },
+    {
+      "name": "stopped-2",
+      "wall_seconds": 15.484091959078796,
+      "windowserver_cpu_percent_one_core": 48.30764386926558,
+      "whole_device_gpu_samples": [
+        {
+          "Tiler Utilization %": 54,
+          "Renderer Utilization %": 87,
+          "Device Utilization %": 87
+        },
+        {
+          "Tiler Utilization %": 49,
+          "Renderer Utilization %": 83,
+          "Device Utilization %": 83
+        },
+        {
+          "Tiler Utilization %": 51,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 55,
+          "Renderer Utilization %": 94,
+          "Device Utilization %": 94
+        },
+        {
+          "Tiler Utilization %": 51,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 86
+        },
+        {
+          "Tiler Utilization %": 51,
+          "Renderer Utilization %": 82,
+          "Device Utilization %": 82
+        },
+        {
+          "Tiler Utilization %": 51,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 52,
+          "Renderer Utilization %": 86,
+          "Device Utilization %": 86
+        },
+        {
+          "Tiler Utilization %": 54,
+          "Renderer Utilization %": 90,
+          "Device Utilization %": 90
+        },
+        {
+          "Tiler Utilization %": 49,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 50,
+          "Renderer Utilization %": 84,
+          "Device Utilization %": 84
+        },
+        {
+          "Tiler Utilization %": 47,
+          "Renderer Utilization %": 85,
+          "Device Utilization %": 85
+        },
+        {
+          "Tiler Utilization %": 44,
+          "Renderer Utilization %": 80,
+          "Device Utilization %": 81
+        },
+        {
+          "Tiler Utilization %": 65,
+          "Renderer Utilization %": 87,
+          "Device Utilization %": 87
+        },
+        {
+          "Tiler Utilization %": 41,
+          "Renderer Utilization %": 81,
+          "Device Utilization %": 82
+        }
+      ],
+      "whole_device_gpu_mean": 85.46666666666667
+    },
+    {
+      "name": "stopped-3",
+      "wall_seconds": 15.414620083058253,
+      "windowserver_cpu_percent_one_core": 49.82283026510574,
+      "whole_device_gpu_samples": [
+        {
+          "Tiler Utilization %": 42,
+          "Renderer Utilization %": 62,
+          "Device Utilization %": 62
+        },
+        {
+          "Tiler Utilization %": 37,
+          "Renderer Utilization %": 67,
+          "Device Utilization %": 67
+        },
+        {
+          "Tiler Utilization %": 38,
+          "Renderer Utilization %": 63,
+          "Device Utilization %": 63
+        },
+        {
+          "Tiler Utilization %": 35,
+          "Renderer Utilization %": 60,
+          "Device Utilization %": 60
+        },
+        {
+          "Tiler Utilization %": 46,
+          "Renderer Utilization %": 80,
+          "Device Utilization %": 80
+        },
+        {
+          "Tiler Utilization %": 35,
+          "Renderer Utilization %": 61,
+          "Device Utilization %": 61
+        },
+        {
+          "Tiler Utilization %": 40,
+          "Renderer Utilization %": 61,
+          "Device Utilization %": 61
+        },
+        {
+          "Tiler Utilization %": 29,
+          "Renderer Utilization %": 66,
+          "Device Utilization %": 66
+        },
+        {
+          "Tiler Utilization %": 40,
+          "Renderer Utilization %": 80,
+          "Device Utilization %": 82
+        },
+        {
+          "Tiler Utilization %": 46,
+          "Renderer Utilization %": 92,
+          "Device Utilization %": 92
+        },
+        {
+          "Tiler Utilization %": 36,
+          "Renderer Utilization %": 94,
+          "Device Utilization %": 94
+        },
+        {
+          "Tiler Utilization %": 39,
+          "Renderer Utilization %": 93,
+          "Device Utilization %": 93
+        },
+        {
+          "Tiler Utilization %": 37,
+          "Renderer Utilization %": 91,
+          "Device Utilization %": 91
+        },
+        {
+          "Tiler Utilization %": 37,
+          "Renderer Utilization %": 93,
+          "Device Utilization %": 94
+        },
+        {
+          "Tiler Utilization %": 38,
+          "Renderer Utilization %": 92,
+          "Device Utilization %": 92
+        }
+      ],
+      "whole_device_gpu_mean": 77.2
+    }
+  ],
+  "activity_monitor_snapshots": [
+    {
+      "case": "initially stopped",
+      "windowserver_cpu": 40.8,
+      "windowserver_gpu": 16.0
+    },
+    {
+      "case": "paused",
+      "windowserver_cpu": 46.6,
+      "windowserver_gpu": 0.0
+    },
+    {
+      "case": "animated",
+      "windowserver_cpu": 46.9,
+      "windowserver_gpu": 45.4,
+      "stillwater_cpu": 3.4,
+      "stillwater_gpu": 38.9
+    },
+    {
+      "case": "frozen repeat",
+      "windowserver_cpu": 40.2,
+      "windowserver_gpu": 77.7,
+      "stillwater_cpu": 3.1,
+      "stillwater_gpu": 12.3
+    },
+    {
+      "case": "frozen 12 fps",
+      "windowserver_cpu": 39.1,
+      "windowserver_gpu": 78.6,
+      "stillwater_cpu": 1.4,
+      "stillwater_gpu": 1.3
+    },
+    {
+      "case": "after all trials stopped",
+      "windowserver_cpu": 49.1,
+      "windowserver_gpu": 75.1
+    }
+  ],
+  "limitations": [
+    "Activity Monitor percentages are snapshots with its own averaging window; do not sum or subtract these against IORegistry averages.",
+    "No privileged powermetrics per-process GPU trace; noninteractive sudo requires password.",
+    "Frozen trial redraws identical scene time every frame; it still runs scene shaders, and does not isolate presentation alone.",
+    "Opacity trial changes only the NSView isOpaque declaration; the window/layer were already opaque.",
+    "Later stopped baseline remained high, so the first stopped/animated delta is not a valid isolated causal estimate.",
+    "No production renderer changes or system preference changes."
+  ]
+}
