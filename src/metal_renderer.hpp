@@ -22,6 +22,8 @@ struct RenderStatistics {
     unsigned int render_width{}, render_height{};
     std::uint64_t conv_storage_bytes{}, conv_source_triangles{}, conv_boundary_triangles{};
     std::uint64_t conv_static_updates{}, conv_moving_updates{};
+    std::uint64_t camera_records{}, camera_registration_builds{}, camera_validated_samples{};
+    double camera_acquisition_command_gpu_seconds{};
 };
 struct VisibilityProbe {
     std::array<Float4, 4> samples{};
@@ -34,9 +36,12 @@ class Renderer final {
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
     bool initialize(id layer, const Scene& scene, const std::string& shader_path,
-                    unsigned int samples, bool conv_fast = false);
+                    unsigned int samples, bool conv_fast = false, bool compact_camera = false);
     void resize(unsigned int width, unsigned int height);
     void set_retained(bool enabled);
+    void set_camera_validation(bool enabled) {
+        validate_camera_ = enabled;
+    }
     void set_camera(const Matrix& view, Float4 eye);
     bool set_light_intensity(float intensity);
     bool query_fixed_visibility(unsigned int x, unsigned int y, VisibilityProbe& result);
@@ -91,6 +96,12 @@ class Renderer final {
     Matrix reconstruction_{};
     bool memoryless_supported_{};
     bool conv_fast_{};
+    bool compact_camera_{};
+    bool validate_camera_{};
+    id camera_validate_pipeline_{nil};
+    id camera_map_{nil}, camera_records_{nil};
+    id camera_classify_pipeline_{nil}, camera_pack_pipeline_{nil};
+    bool register_camera(id& command, bool updated_shadows);
     Float4 eye_{0, 4.65F, 20.5F, 0};
     id fixed_shadow_{nil};
     bool fixed_shadow_ready_{};

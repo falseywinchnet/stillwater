@@ -8,6 +8,7 @@ struct Options {
     bool smoke_tap{};
     bool retained{true};
     bool conv_fast{};
+    bool compact_camera{true};
     double capture_time{};
     std::string verify_retained{};
     unsigned int fps{24};

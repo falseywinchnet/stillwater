@@ -114,3 +114,9 @@ The optional `--aa conv-fast` geometry-coverage experiment and `--aa point`
 control are documented in [CONV_AA.md](docs/CONV_AA.md). Normal launches keep
 4× MSAA. The experimental path has unresolved overlap and alpha-to-coverage
 quality differences, and is not the default.
+
+The default MSAA renderer now stores a compact camera-local surface registry.
+At the Neo's 1408×881 size, it preserves the four depth samples while sharing
+identical shading records inside each pixel. Use `--dense-camera` to compare the
+previous cache. See [CAMERA_REGISTRY.md](docs/CAMERA_REGISTRY.md) for the data
+contract, measurements and the remaining geometric CONV work.

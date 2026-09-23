@@ -55,3 +55,17 @@ A rich, interactive desktop aquarium with very low recurring CPU work.
   and topology storage in measurements.
 - Preserve the normal 4× MSAA default until overlap, material opacity and motion
   quality are accepted. Use opaque RGB PNG capture to match the opaque layer.
+
+## Camera registry
+
+- Read `docs/CAMERA_REGISTRY.md`. Compact camera registration is the default for
+  2×/4× MSAA; `--dense-camera` retains the preceding reference representation.
+- Preserve all seven words of each registered surface and every raster depth.
+  Match complete records, never object identity alone. Keep sample selectors.
+- Acquire/classify/pack only on camera-view invalidation. Count readback and exact
+  allocation happen at that boundary, never during steady animation.
+- `--verify-retained` checks every reconstructed sample before acquisition
+  textures are released. Preserve this independent inverse check and the image,
+  identity, world-coordinate and depth gates at both sample counts.
+- This is camera-local storage, not analytic CONV coverage or sparse tile repair.
+  A future geometric registry must conservatively include unsampled thin features.

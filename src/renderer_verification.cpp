@@ -74,6 +74,7 @@ bool verify_retained_renderer(Renderer& renderer, Scene& scene, const std::strin
     if (filesystem_error)
         return false;
     Verification test{renderer, scene, directory};
+    renderer.set_camera_validation(true);
     // The host has not entered its animation loop: all times and changes are explicit.
     renderer.resize(960, 600);
     VisibilityProbe probe{};
@@ -184,6 +185,7 @@ bool verify_retained_renderer(Renderer& renderer, Scene& scene, const std::strin
     receipt << "{\n  \"failures\": " << test.failures
             << ",\n  \"comparisons\": " << test.comparisons
             << ",\n  \"visibility_builds\": " << renderer.statistics().visibility_builds
+            << ",\n  \"camera_validated_samples\": " << renderer.statistics().camera_validated_samples
             << ",\n  \"light_visibility_builds\": " << renderer.statistics().light_visibility_builds
             << ",\n  \"queried_identity\": " << probe.samples[0].w << "\n}\n";
     std::cout << "Native retained verification: " << test.comparisons << " image pairs, "

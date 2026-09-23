@@ -180,3 +180,10 @@ A prior preview smoke was occluded before its timed tap (zero taps); it is retai
 in the receipt as an incomplete tap exercise rather than counted as a pass.
 The paused desktop run made four startup/placement draws and no animation frames.
 Neither panel reported accepting keyboard focus.
+
+## Camera-local continuation
+
+The default camera cache has since moved to distinct per-pixel surface records,
+while retaining 4× coverage/depth. See [CAMERA_REGISTRY.md](CAMERA_REGISTRY.md)
+and its evidence for current Neo measurements. The dense-cache measurements and
+original capture methodology above remain historical.

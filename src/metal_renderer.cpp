@@ -128,6 +128,11 @@ Renderer::~Renderer() {
     for (const id texture : visibility_)
         release(texture);
     release(visibility_depth_);
+    release(camera_map_);
+    release(camera_records_);
+    release(camera_classify_pipeline_);
+    release(camera_pack_pipeline_);
+    release(camera_validate_pipeline_);
     release(light_visibility_);
     release(light_visibility_pipeline_);
     release(query_pipeline_);
@@ -180,13 +185,14 @@ id Renderer::make_texture(unsigned long format, unsigned int width, unsigned int
     return texture;
 }
 bool Renderer::initialize(id layer, const Scene& scene, const std::string& shader_path,
-                          unsigned int samples, bool conv_fast) {
+                          unsigned int samples, bool conv_fast, bool compact_camera) {
     if (samples != 1 && samples != 2 && samples != 4) {
         error_ = "Sample count must be one, two or four";
         return false;
     }
     samples_ = samples;
     conv_fast_ = conv_fast;
+    compact_camera_ = compact_camera;
     if (conv_fast_)
         samples_ = 1;
     source_vertices_ = scene.vertices().data();
@@ -212,6 +218,15 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     }
     std::string source{std::istreambuf_iterator<char>(file),
                        std::istreambuf_iterator<char>()};
+    if (compact_camera_) {
+        std::ifstream camera(shader_path.substr(0, shader_path.find_last_of('/')) + "/camera_registry.metal");
+        if (!camera) {
+            error_ = "Cannot open camera_registry.metal";
+            return false;
+        }
+        source = "#define SW_COMPACT_CAMERA 1\n" + source +
+                 std::string(std::istreambuf_iterator<char>(camera), std::istreambuf_iterator<char>());
+    }
     if (samples_ == 1)
         source = "#define SW_SINGLE_SAMPLE 1\n" + source;
     if (conv_fast_) {
@@ -317,6 +332,29 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     if (query_pipeline_ == nil)
         error_ = error_text(error);
     release(query);
+    if (compact_camera_) {
+        id classify = send<id>(library, "newFunctionWithName:", string("classify_camera"));
+        camera_classify_pipeline_ = send<id>(device_, "newComputePipelineStateWithFunction:error:", classify, &error);
+        release(classify);
+        id pack = send<id>(library, "newFunctionWithName:", string("pack_camera"));
+        camera_pack_pipeline_ = send<id>(device_, "newComputePipelineStateWithFunction:error:", pack, &error);
+        release(pack);
+        id validate = send<id>(library, "newFunctionWithName:", string("validate_camera"));
+        camera_validate_pipeline_ = send<id>(device_, "newComputePipelineStateWithFunction:error:", validate, &error);
+        release(validate);
+        if (camera_validate_pipeline_ == nil || camera_classify_pipeline_ == nil ||
+            camera_pack_pipeline_ == nil) {
+            error_ = error_text(error);
+            release(vertex);
+            release(fragment);
+            release(shadow_vertex);
+            release(background_vertex);
+            release(background_fragment);
+            release(library);
+            release(descriptor);
+            return false;
+        }
+    }
     id retain = send<id>(library, "newFunctionWithName:", string("retain_surface"));
     id retained_vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_regular_vertex" : "tank_vertex"));
     send<void>(descriptor, "setVertexFunction:", retained_vertex);
@@ -678,6 +716,10 @@ bool Renderer::query_fixed_visibility(unsigned int x, unsigned int y, Visibility
     id command = send<id>(queue_, "commandBuffer");
     id encoder = send<id>(command, "computeCommandEncoder");
     send<void>(encoder, "setComputePipelineState:", query_pipeline_);
+    if (compact_camera_) {
+        send<void>(encoder, "setBuffer:offset:atIndex:", camera_map_, 0UL, 8UL);
+        send<void>(encoder, "setBuffer:offset:atIndex:", camera_records_, 0UL, 9UL);
+    }
     send<void>(encoder, "setTexture:atIndex:", visibility_[2], 0UL);
     send<void>(encoder, "setTexture:atIndex:", visibility_depth_, 1UL);
     send<void>(encoder, "setTexture:atIndex:", visibility_[3], 2UL);
@@ -719,7 +761,7 @@ void Renderer::resize(unsigned int width, unsigned int height) {
     std::array<id, 4> visibility{};
     bool complete = replacement != nil && (samples_ == 1 || color != nil) &&
                     (!retained_ || (visibility_depth != nil && light_visibility != nil));
-    for (std::size_t index = 0; retained_ && index < visibility.size(); ++index) {
+    for (std::size_t index = 0; retained_ && !compact_camera_ && index < visibility.size(); ++index) {
         visibility[index] = make_texture(visibility_formats[index], width, height, 5UL, samples_);
         complete = complete && visibility[index] != nil;
     }
@@ -745,6 +787,10 @@ void Renderer::resize(unsigned int width, unsigned int height) {
     light_visibility_ = light_visibility;
     light_visibility_ready_ = false;
     visibility_ = visibility;
+    release(camera_map_);
+    release(camera_records_);
+    camera_map_ = nil;
+    camera_records_ = nil;
     visibility_ready_ = false;
     width_ = width;
     height_ = height;
@@ -841,7 +887,9 @@ bool Renderer::prepare_conv_vertices(id command, const Scene& scene, const void*
     send<void>(encoder, "setBuffer:offset:atIndex:", actors_, 0UL, 2UL);
     send<void>(encoder, "setBytes:length:atIndex:", uniforms, uniform_size, 3UL);
     send<void>(encoder, "setBuffer:offset:atIndex:", conv_prepared_, 0UL, 4UL);
-    struct Size { unsigned long width, height, depth; };
+    struct Size {
+        unsigned long width, height, depth;
+    };
     for (std::size_t index = 0; index < scene.batches().size(); ++index) {
         const Batch& batch = scene.batches()[index];
         if (conv_fixed_ready_ && !moving_instance(scene.instances()[batch.first_instance]))
@@ -982,6 +1030,122 @@ bool Renderer::finish_pending(bool wait) {
     }
     return success;
 }
+bool Renderer::register_camera(id& command, bool updated_shadows) {
+    // Acquisition is an infrequent synchronization boundary. Read back only one
+    // count per 256 pixels, allocate exact storage, then release all four dense
+    // coefficient attachments. Ordinary animation has no registration/readback.
+    const unsigned long pixels = static_cast<unsigned long>(width_) * height_;
+    const unsigned long groups = (pixels + 255UL) / 256UL;
+    id map = send<id>(device_, "newBufferWithLength:options:", pixels * 8UL, 32UL);
+    id counts = send<id>(device_, "newBufferWithLength:options:", groups * 4UL, 0UL);
+    if (map == nil || counts == nil) {
+        release(map);
+        release(counts);
+        error_ = "Cannot allocate camera registration map";
+        return false;
+    }
+    struct Size {
+        unsigned long width, height, depth;
+    };
+    id encoder = send<id>(command, "computeCommandEncoder");
+    send<void>(encoder, "setComputePipelineState:", camera_classify_pipeline_);
+    for (unsigned long index = 0; index < visibility_.size(); ++index)
+        send<void>(encoder, "setTexture:atIndex:", visibility_[index], index);
+    send<void>(encoder, "setBuffer:offset:atIndex:", map, 0UL, 0UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", counts, 0UL, 1UL);
+    send<void>(encoder, "dispatchThreadgroups:threadsPerThreadgroup:",
+                   Size{groups, 1, 1}, Size{256, 1, 1});
+    send<void>(encoder, "endEncoding");
+    send<void>(command, "commit");
+    send<void>(command, "waitUntilCompleted");
+    if (send<unsigned long>(command, "status") != 4UL) {
+        error_ = error_text(send<id>(command, "error"));
+        release(map);
+        release(counts);
+        return false;
+    }
+    const double elapsed = send<double>(command, "GPUEndTime") - send<double>(command, "GPUStartTime");
+    statistics_.camera_acquisition_command_gpu_seconds += elapsed;
+    statistics_.gpu_seconds += elapsed;
+    if (updated_shadows)
+        statistics_.gpu_shadow_frame_seconds += elapsed;
+    else
+        statistics_.gpu_reuse_frame_seconds += elapsed;
+    std::uint32_t* offsets = static_cast<std::uint32_t*>(send<void*>(counts, "contents"));
+    std::uint32_t total = 0;
+    for (unsigned long group = 0; group < groups; ++group) {
+        const std::uint32_t count = offsets[group];
+        offsets[group] = total;
+        total += count;
+    }
+    id records = send<id>(device_, "newBufferWithLength:options:", static_cast<unsigned long>(total) * 28UL, 32UL);
+    if (records == nil) {
+        release(map);
+        release(counts);
+        error_ = "Cannot allocate registered camera surfaces";
+        return false;
+    }
+    command = send<id>(queue_, "commandBuffer");
+    encoder = send<id>(command, "computeCommandEncoder");
+    send<void>(encoder, "setComputePipelineState:", camera_pack_pipeline_);
+    for (unsigned long index = 0; index < visibility_.size(); ++index)
+        send<void>(encoder, "setTexture:atIndex:", visibility_[index], index);
+    send<void>(encoder, "setBuffer:offset:atIndex:", map, 0UL, 0UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", counts, 0UL, 1UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", records, 0UL, 2UL);
+    send<void>(encoder, "dispatchThreadgroups:threadsPerThreadgroup:",
+                   Size{groups, 1, 1}, Size{256, 1, 1});
+    send<void>(encoder, "endEncoding");
+    release(counts);
+    if (validate_camera_) {
+        id errors = send<id>(device_, "newBufferWithLength:options:", 4UL, 0UL);
+        if (errors == nil) {
+            release(map);
+            release(records);
+            error_ = "Cannot allocate camera validation counter";
+            return false;
+        }
+        std::uint32_t* error_count = static_cast<std::uint32_t*>(send<void*>(errors, "contents"));
+        *error_count = 0;
+        encoder = send<id>(command, "computeCommandEncoder");
+        send<void>(encoder, "setComputePipelineState:", camera_validate_pipeline_);
+        for (unsigned long index = 0; index < visibility_.size(); ++index)
+            send<void>(encoder, "setTexture:atIndex:", visibility_[index], index);
+        send<void>(encoder, "setBuffer:offset:atIndex:", map, 0UL, 0UL);
+        send<void>(encoder, "setBuffer:offset:atIndex:", records, 0UL, 1UL);
+        send<void>(encoder, "setBuffer:offset:atIndex:", errors, 0UL, 2UL);
+        send<void>(encoder, "dispatchThreadgroups:threadsPerThreadgroup:",
+                   Size{groups, 1, 1}, Size{256, 1, 1});
+        send<void>(encoder, "endEncoding");
+        send<void>(command, "commit");
+        send<void>(command, "waitUntilCompleted");
+        const bool valid = send<unsigned long>(command, "status") == 4UL && *error_count == 0;
+        release(errors);
+        if (!valid) {
+            release(map);
+            release(records);
+            error_ = "Camera registry failed exact sample reconstruction";
+            return false;
+        }
+        statistics_.camera_validated_samples += pixels * samples_;
+        // Diagnostic GPU work is separate from production measurements.
+        command = send<id>(queue_, "commandBuffer");
+    }
+    release(camera_map_);
+    release(camera_records_);
+    camera_map_ = map;
+    camera_records_ = records;
+    // The command buffer owns acquisition textures through pack completion.
+    for (id& texture : visibility_) {
+        release(texture);
+        texture = nil;
+    }
+    statistics_.camera_records = total;
+    ++statistics_.camera_registration_builds;
+    statistics_.retained_bytes =
+        pixels * (8UL + samples_ * 6UL) + static_cast<std::uint64_t>(total) * 28UL;
+    return true;
+}
 bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
     if (scene.vertices().data() != source_vertices_ || scene.indices().data() != source_indices_ ||
         scene.instances().size() != source_instances_ || scene.actors().size() != source_actors_) {
@@ -1052,6 +1216,14 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         light_visibility_ready_ = false;
     if (retained_) {
         if (!visibility_ready_) {
+            for (std::size_t index = 0; index < visibility_.size(); ++index) {
+                if (visibility_[index] == nil)
+                    visibility_[index] = make_texture(visibility_formats[index], width_, height_, 5UL, samples_);
+                if (visibility_[index] == nil) {
+                    error_ = "Cannot allocate camera acquisition textures";
+                    return false;
+                }
+            }
             id visibility_pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
             for (unsigned long index = 0; index < visibility_.size(); ++index) {
                 id target = send<id>(send<id>(visibility_pass, "colorAttachments"),
@@ -1070,6 +1242,8 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
                 send<id>(command, "renderCommandEncoderWithDescriptor:", visibility_pass);
             encode_geometry(visibility_encoder, scene, visibility_pipeline_, &uniforms,
                             sizeof(uniforms), DrawSet::retained_surface);
+            if (compact_camera_ && !register_camera(command, updated_shadows))
+                return false;
             visibility_ready_ = true;
             ++statistics_.visibility_builds;
             light_visibility_ready_ = false;
@@ -1092,6 +1266,10 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         send<void>(light_encoder, "setFragmentTexture:atIndex:", visibility_[2], 4UL);
         send<void>(light_encoder, "setFragmentTexture:atIndex:", visibility_[3], 7UL);
         send<void>(light_encoder, "setFragmentTexture:atIndex:", visibility_depth_, 5UL);
+        if (compact_camera_) {
+            send<void>(light_encoder, "setFragmentBuffer:offset:atIndex:", camera_map_, 0UL, 8UL);
+            send<void>(light_encoder, "setFragmentBuffer:offset:atIndex:", camera_records_, 0UL, 9UL);
+        }
         send<void>(light_encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
         send<void>(light_encoder, "endEncoding");
         light_visibility_ready_ = true;
@@ -1125,6 +1303,10 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
                        visibility_slots[index]);
         send<void>(encoder, "setFragmentTexture:atIndex:", visibility_depth_, 5UL);
         send<void>(encoder, "setFragmentTexture:atIndex:", light_visibility_, 6UL);
+        if (compact_camera_) {
+            send<void>(encoder, "setFragmentBuffer:offset:atIndex:", camera_map_, 0UL, 8UL);
+            send<void>(encoder, "setFragmentBuffer:offset:atIndex:", camera_records_, 0UL, 9UL);
+        }
     }
     send<void>(encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
     encode_geometry(encoder, scene, pipeline_, &uniforms, sizeof(uniforms),

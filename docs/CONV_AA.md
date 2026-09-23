@@ -153,3 +153,11 @@ coverage compositor into an exact overlap/transparency method.
 Next work should preserve the reduced boundary workload while replacing the
 approximate composition with visible color-area and a defined material opacity
 contract. Simply adding more parallel triangle work recreates the original cost.
+
+## Camera-local continuation
+
+The next implementation changes the retained view instead of adding more work
+to this world-boundary overlay. See [CAMERA_REGISTRY.md](CAMERA_REGISTRY.md).
+It preserves MSAA acquisition and quality while sharing camera-visible surface
+records. It is now the default MSAA cache; the CONV trial described here remains
+optional and retains its documented visibility/opacity limitations.

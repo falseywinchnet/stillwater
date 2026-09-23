@@ -152,6 +152,10 @@ void print_metrics() {
            << ",\n  \"conv_boundary_triangles\": " << render.conv_boundary_triangles
            << ",\n  \"conv_static_updates\": " << render.conv_static_updates
            << ",\n  \"conv_moving_updates\": " << render.conv_moving_updates
+           << ",\n  \"compact_camera\": " << (state.options.compact_camera ? "true" : "false")
+           << ",\n  \"camera_records\": " << render.camera_records
+           << ",\n  \"camera_registration_builds\": " << render.camera_registration_builds
+           << ",\n  \"camera_acquisition_command_gpu_seconds\": " << render.camera_acquisition_command_gpu_seconds
            << ",\n  \"msaa_samples\": " << state.options.samples
            << ",\n  \"conv_fast\": " << (state.options.conv_fast ? "true" : "false")
            << ",\n  \"render_scale\": " << state.options.render_scale
@@ -446,7 +450,8 @@ int run_macos(const Options& options) {
         std::cerr << "Habitat: " << habitat_error << '\n';
         return 1;
     }
-    if (!state.renderer.initialize(state.layer, state.scene, shader_path, state.options.samples, options.conv_fast)) {
+    if (!state.renderer.initialize(state.layer, state.scene, shader_path, state.options.samples,
+                                   options.conv_fast, options.compact_camera)) {
         std::cerr << state.renderer.error() << '\n';
         host = nullptr;
         return 1;

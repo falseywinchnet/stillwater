@@ -60,3 +60,7 @@ system wallpaper settings. The working copy, not the M4 copy, owns new edits.
 The owner clarified that the top control means a macOS menu-bar dropdown.
 The carried-over floating panel has been removed; the ◉ status item provides
 all actions. Earlier widget measurements describe the prior UI.
+
+The current default MSAA cache is the [camera-local registry](CAMERA_REGISTRY.md).
+`--dense-camera` selects the prior cache for comparison. CONV geometric coverage
+has not replaced MSAA; the earlier world-boundary overlay remains an experiment.

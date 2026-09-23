@@ -300,22 +300,46 @@ float3 retained_world(uint2 pixel,float distance,float2 correction,
     float4 world=reconstruction*float4((ndc+correction)*distance,-distance,1);
     return world.xyz/world.w;
 }
+// Each record stores the original seven 32-bit words, with no quantization.
+// Per-pixel selectors preserve the raster sample's visible surface identity.
+#ifdef SW_COMPACT_CAMERA
+struct CameraRecord { uint words[7]; };
+#define SW_CAMERA_INPUT ,const device uint2* camera_map [[buffer(8)]],const device CameraRecord* camera_records [[buffer(9)]]
+CameraRecord camera_record(uint2 pixel,uint sample,uint width,
+ const device uint2* map,const device CameraRecord* records) {
+    uint2 entry=map[pixel.y*width+pixel.x];
+    return records[entry.x+((entry.y>>(sample*2))&3)];
+}
+#else
+#define SW_CAMERA_INPUT
+#endif
 struct RestoredSurface { float4 color [[color(0)]]; float depth [[depth(any)]]; };
 fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[sample_id]],
  constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
  SW_TEXTURE<half> base [[texture(1)]],SW_TEXTURE<half> surface [[texture(2)]],
  SW_TEXTURE<float> distance_identity [[texture(4)]],SW_TEXTURE<half> center_correction [[texture(7)]],
- SW_DEPTH<float> depth [[texture(5)]],SW_TEXTURE<half> light_visibility [[texture(6)]]) {
+ SW_DEPTH<float> depth [[texture(5)]],SW_TEXTURE<half> light_visibility [[texture(6)]] SW_CAMERA_INPUT) {
     uint2 pixel=uint2(in.position.xy);
     float z=SW_READ(depth,pixel,sample);
     if(z>=1) {
         float3 color=pow(max(1-exp(-water_color(in.uv)*1.6f),0.0f),float3(1.0f/2.2f));
         return {float4(color,1),1};
     }
+#ifdef SW_COMPACT_CAMERA
+    CameraRecord record=camera_record(pixel,sample,uint(u.clock.y),camera_map,camera_records);
+    float4 cached_base=float4(half4(as_type<half2>(record.words[0]),as_type<half2>(record.words[1])));
+    float4 cached_surface=float4(half4(as_type<half2>(record.words[2]),as_type<half2>(record.words[3])));
+#else
     float4 cached_base=float4(SW_READ(base,pixel,sample)),cached_surface=float4(SW_READ(surface,pixel,sample));
+#endif
     LightingTerms terms={cached_base.rgb,cached_surface.rgb,cached_base.a,cached_surface.a};
+#ifdef SW_COMPACT_CAMERA
+    float distance=as_type<float>(record.words[4]);
+    float2 correction=float2(as_type<half2>(record.words[6]));
+#else
     float distance=SW_READ(distance_identity,pixel,sample).r;
     float2 correction=float2(SW_READ(center_correction,pixel,sample).rg);
+#endif
     float3 world=retained_world(pixel,distance,correction,u.reconstruction,u.clock.yz);
     float visible=float(SW_READ(light_visibility,pixel,sample).r);
     float3 color=illuminate_fixed(terms,world,u,visible);
@@ -325,11 +349,17 @@ fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[
 // retained camera surfaces change; animated caustics remain evaluated every frame.
 fragment half retain_light_visibility(WaterOut in [[stage_in]],uint sample [[sample_id]],
  constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
- SW_TEXTURE<float> distance_identity [[texture(4)]],SW_TEXTURE<half> center_correction [[texture(7)]],SW_DEPTH<float> depth [[texture(5)]]) {
+ SW_TEXTURE<float> distance_identity [[texture(4)]],SW_TEXTURE<half> center_correction [[texture(7)]],SW_DEPTH<float> depth [[texture(5)]] SW_CAMERA_INPUT) {
     uint2 pixel=uint2(in.position.xy);
     if(SW_READ(depth,pixel,sample)>=1) return half(1);
+#ifdef SW_COMPACT_CAMERA
+    CameraRecord record=camera_record(pixel,sample,uint(u.clock.y),camera_map,camera_records);
+    float distance=as_type<float>(record.words[4]);
+    float2 correction=float2(as_type<half2>(record.words[6]));
+#else
     float distance=SW_READ(distance_identity,pixel,sample).r;
     float2 correction=float2(SW_READ(center_correction,pixel,sample).rg);
+#endif
     float3 world=retained_world(pixel,distance,correction,u.reconstruction,u.clock.yz);
     float visible=visibility(u.light*float4(world,1),shadow);
     return half(visible);
@@ -338,14 +368,23 @@ struct VisibilityProbe { float4 samples[4]; float4 depths; };
 kernel void query_visibility(SW_TEXTURE<float> distance_identity [[texture(0)]],
  SW_DEPTH<float> depth [[texture(1)]],SW_TEXTURE<half> center_correction [[texture(2)]],constant uint2& pixel [[buffer(0)]],
  device VisibilityProbe& result [[buffer(1)]],constant float4x4& reconstruction [[buffer(2)]],
- constant float4& dimensions [[buffer(3)]]) {
+ constant float4& dimensions [[buffer(3)]] SW_CAMERA_INPUT) {
     result.depths=float4(1);
     for(uint index=0;index<4;++index) {
         result.samples[index]=float4(0);
-        if(index<SW_SAMPLES(distance_identity)) {
+        if(index<SW_SAMPLES(depth)) {
+#ifdef SW_COMPACT_CAMERA
+            CameraRecord record=camera_record(pixel,index,uint(dimensions.x),camera_map,camera_records);
+            float2 cached=float2(as_type<float>(record.words[4]),as_type<float>(record.words[5]));
+#else
             float2 cached=SW_READ(distance_identity,pixel,index).rg;
+#endif
             if(cached.y!=0) {
+#ifdef SW_COMPACT_CAMERA
+                float2 correction=float2(as_type<half2>(record.words[6]));
+#else
                 float2 correction=float2(SW_READ(center_correction,pixel,index).rg);
+#endif
                 float3 world=retained_world(pixel,cached.x,correction,reconstruction,dimensions.xy);
                 result.samples[index]=float4(world,cached.y);
             }
