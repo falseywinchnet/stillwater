@@ -80,9 +80,15 @@ Instance pearl_transform(Instance bubble,Vertex leaf,Instance parent,float time)
     float radius=bubble.anatomy.z*(0.70f+0.30f*smoothstep(0.0f,hold,age));
     float2 motion=strand_motion(leaf.anchor.xyz,leaf.bend.xyz,leaf.along.w,leaf.bend.w,time-released);
     float3 normal=normalize(leaf.normal.xyz-leaf.along.xyz*(motion.y*dot(leaf.bend.xyz,leaf.normal.xyz)));
+    float3x3 basis=float3x3(parent.transform[0].xyz,parent.transform[1].xyz,parent.transform[2].xyz);
+    float3 scale2=float3(dot(basis[0],basis[0]),dot(basis[1],basis[1]),dot(basis[2],basis[2]));
+    normal=normalize(basis*(normal/max(scale2,float3(0.0000000001f))));
+    // A bubble can collect only beneath a near-horizontal surface. Fade out
+    // between 20 and 25 degrees of tilt; never pin one to a vertical blade.
+    radius*=smoothstep(0.906307787f,0.94f,abs(normal.y));
     if(normal.y>0) normal=-normal;
-    float3 local=leaf.position.xyz+leaf.bend.xyz*motion.x+(normal*0.60f+bubble.color.xyz*0.80f)*radius;
-    float3 world=(parent.transform*float4(local,1)).xyz;
+    float3 local=leaf.position.xyz+leaf.bend.xyz*motion.x;
+    float3 world=(parent.transform*float4(local,1)).xyz+normal*radius*0.90f;
     world.y+=released*bubble.behavior.z;
     world.x+=0.07f*released*sin(released*2+bubble.behavior.y);
     world.z+=released*0.025f;

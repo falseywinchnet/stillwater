@@ -121,6 +121,21 @@ Vec3 actor_position(const Actor& actor, double time) {
                       actor.center.z + actor.cruise.x * 0.25 * (std::cos(angle) - 1)};
     return result;
 }
+// Transform a surface normal, including nonuniform parent scale.
+Vec3 leaf_world_normal(Vec3 normal, const Matrix& matrix) {
+    const std::array<float, 16>& m = matrix.values;
+    const double sx = std::max(1e-10, static_cast<double>(m[0]*m[0]+m[1]*m[1]+m[2]*m[2]));
+    const double sy = std::max(1e-10, static_cast<double>(m[4]*m[4]+m[5]*m[5]+m[6]*m[6]));
+    const double sz = std::max(1e-10, static_cast<double>(m[8]*m[8]+m[9]*m[9]+m[10]*m[10]));
+    return normalized({m[0]*normal.x/sx + m[4]*normal.y/sy + m[8]*normal.z/sz,
+                       m[1]*normal.x/sx + m[5]*normal.y/sy + m[9]*normal.z/sz,
+                       m[2]*normal.x/sx + m[6]*normal.y/sy + m[10]*normal.z/sz});
+}
+bool leaf_bubble_supported(const Vertex& leaf, const Instance& parent) {
+    const Vec3 normal = leaf_world_normal({leaf.normal.x, leaf.normal.y, leaf.normal.z}, parent.transform);
+    // Within 20 degrees of horizontal at rest, with room for gentle leaf sway.
+    return std::abs(normal.y) >= 0.94;
+}
 Matrix leaf_bubble_transform(const Instance& bubble, const Vertex& leaf,
                              const Instance& parent, double time) {
     const double age = std::fmod(time + bubble.behavior.y, bubble.anatomy.w);
@@ -149,15 +164,21 @@ Matrix leaf_bubble_transform(const Instance& bubble, const Vertex& leaf,
     Vec3 normal = normalized({leaf.normal.x - leaf.along.x * slope * bend_normal,
                               leaf.normal.y - leaf.along.y * slope * bend_normal,
                               leaf.normal.z - leaf.along.z * slope * bend_normal});
+    normal = leaf_world_normal(normal, parent.transform);
+    const double support = std::clamp((std::abs(normal.y) - 0.906307787) / (0.94 - 0.906307787), 0.0, 1.0);
+    radius *= support * support * (3 - 2 * support);
     if (normal.y > 0)
         normal = {-normal.x, -normal.y, -normal.z};
-    const Vec3 local{leaf.position.x + leaf.bend.x * motion + (normal.x * 0.60 + bubble.color.x * 0.80) * radius,
-                     leaf.position.y + leaf.bend.y * motion + (normal.y * 0.60 + bubble.color.y * 0.80) * radius,
-                     leaf.position.z + leaf.bend.z * motion + (normal.z * 0.60 + bubble.color.z * 0.80) * radius};
+    const Vec3 local{leaf.position.x + leaf.bend.x * motion,
+                     leaf.position.y + leaf.bend.y * motion,
+                     leaf.position.z + leaf.bend.z * motion};
     const Matrix& m = parent.transform;
     Vec3 world{m.values[0]*local.x + m.values[4]*local.y + m.values[8]*local.z + m.values[12],
                m.values[1]*local.x + m.values[5]*local.y + m.values[9]*local.z + m.values[13],
                m.values[2]*local.x + m.values[6]*local.y + m.values[10]*local.z + m.values[14]};
+    world.x += normal.x * radius * 0.90;
+    world.y += normal.y * radius * 0.90;
+    world.z += normal.z * radius * 0.90;
     world.y += released * bubble.behavior.z;
     world.x += 0.07 * released * std::sin(released * 2 + bubble.behavior.y);
     world.z += released * 0.025;

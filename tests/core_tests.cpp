@@ -154,6 +154,7 @@ void habitat_contract() {
         const stillwater::Vertex& leaf = scene.vertices()[leaf_index];
         stillwater::Instance parent = scene.instances()[parent_index];
         require(parent.behavior.x == 10, "pearl attaches to a real plant");
+        require(std::abs(leaf.normal.y) >= 0.94F, "pearls collect only on near-horizontal leaf surfaces");
         const stillwater::Matrix original = stillwater::leaf_bubble_transform(pearl, leaf, parent, 8);
         parent.transform.values[12] += 2;
         const stillwater::Matrix translated = stillwater::leaf_bubble_transform(pearl, leaf, parent, 8);
@@ -167,7 +168,25 @@ void habitat_contract() {
         require(std::abs(just_before.values[13] - just_after.values[13]) < 0.0001F,
                 "leaf attachment joins a rising bubble continuously");
     }
-    require(pearls >= 288 && pearls <= 576, "leaf pearling has a bounded shared-mesh budget");
+    stillwater::Vertex flat{};
+    flat.normal = {0, 1, 0, 0};
+    flat.position = {0, 2, 0, 1};
+    stillwater::Instance support{};
+    support.transform.values = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    stillwater::Instance trapped{};
+    trapped.anatomy = {0, 0, 0.02F, 36};
+    require(stillwater::leaf_bubble_supported(flat, support), "horizontal surface can trap a bubble");
+    const stillwater::Matrix under = stillwater::leaf_bubble_transform(trapped, flat, support, 0);
+    require(under.values[13] < 2 && under.values[12] == 0 && under.values[14] == 0,
+            "attached bubble sits directly below the horizontal leaf, without an edge offset");
+    flat.normal = {1, 0, 0, 0};
+    require(!stillwater::leaf_bubble_supported(flat, support), "vertical blade cannot trap a bubble");
+    const stillwater::Matrix vertical = stillwater::leaf_bubble_transform(trapped, flat, support, 0);
+    require(vertical.values[0] <= 0.000011F, "vertical animated support cannot retain a visible pearl");
+    flat.normal = {0, 1, 0, 0};
+    support.transform.values = {0,1,0,0, -1,0,0,0, 0,0,1,0, 0,0,0,1};
+    require(!stillwater::leaf_bubble_supported(flat, support), "parent rotation controls world-space trapping eligibility");
+    require(pearls == 1728, "leaf pearling triples the 576-instance budget");
     const std::vector<stillwater::Instance> before = scene.instances();
     const stillwater::Vertex* vertices = scene.vertices().data();
     const stillwater::Vec3 destination{1, 2, 3};

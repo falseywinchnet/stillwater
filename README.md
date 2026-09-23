@@ -61,7 +61,7 @@ The compiled app is a local development build, not a notarized distribution.
 
 ## What persists
 
-The scene retains about 8,400 objects, 16 fish, two crabs, a bubble emitter, geometry,
+The scene retains about 9,600 objects, 16 fish, two crabs, a bubble emitter, geometry,
 material textures, and per-object GPU records. Construction and upload happen once.
 Fish trajectories and plant bending are evaluated on the GPU from retained parameters.
 A glass tap changes only nearby creature records; moving a plant or rock changes one

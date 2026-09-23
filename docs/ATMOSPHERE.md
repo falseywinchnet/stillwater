@@ -42,20 +42,24 @@ and the shells grow slightly on ascent. A thin rim and overhead glint use the
 existing MSAA alpha-to-coverage path. They are geometry, not image sprites.
 This inexpensive shell appearance does not solve optical refraction.
 
-Leaf pearling adds at most 576 tiny bubbles, clustered beneath actual leaf margins.
-Groups contain up to six pearls, with a cap of 18 per plant. Half the placement
+Leaf pearling adds 1,728 tiny bubbles beneath near-horizontal leaf surfaces,
+three times the preceding 576-instance budget. World-space normals admit surfaces
+within about 20 degrees of horizontal; vertical blades and steep leaf faces cannot
+hold pearls. The animated transform fades the pearl between 20 and 25 degrees
+of support tilt and suppresses it beyond 25 degrees. Bubbles sit directly below
+the supporting surface, without the previous outward margin offset.
+
+Groups contain up to six pearls, with a cap of 54 per plant. Half the placement
 budget is reserved for foreground planting. A temporary 64×40 planting-depth guide
 at load time favors front leaves; it is a placement heuristic for the default
 view, not an exact visibility solution. Candidate ordering is deterministic and
-covers the full foliage archive. Radii are 0.014–0.026 world units, with 70–100%
-growth; a small offset around the margin keeps the underside sphere touching the
-edge while exposing its glint. Material 15 stores that local edge direction in
-its instance RGB field. Its broader specular footprint survives desktop sampling.
+covers the full foliage archive. Radii remain 0.014–0.026 world units, with 70–100%
+growth. The broader specular footprint survives desktop sampling.
 Each instance references its source leaf and parent plant; the existing strand
 motion carries it until release. A staggered 24–43 second cycle grows a pearl,
 releases it for six seconds, and fades it before reattachment. This is an artistic
 cycle, not simulated gas production or adhesion. A shared 63-vertex, 96-triangle
-mesh supplies all pearls: at the cap, 55,296 triangles and one additional main
+mesh supplies all pearls: at the cap, 165,888 triangles and one additional main
 camera draw. The pearl batch is omitted from shadows. No framebuffer, texture,
 per-frame CPU particle update, or new per-pixel cache is added. Parent transforms
 remain live references, so moving a plant moves its attached pearls as well.
@@ -133,3 +137,8 @@ space is accepted; the automation backend still cannot drag the Finder desktop.
 See the [original receipt](evidence/neo-atmosphere.json) and
 [depth/pearling follow-up receipt](evidence/neo-depth-pearling.json). Reproduce with
 `ctest --test-dir build --output-on-failure` and `python3 tools/verify_native.py`.
+
+The horizontal-surface correction is recorded in
+[its own verification receipt](evidence/neo-horizontal-pearling.json). Its core
+checks require all 1,728 instances, reject vertical and parent-rotated supports,
+and verify that a pearl sits directly below a horizontal surface.

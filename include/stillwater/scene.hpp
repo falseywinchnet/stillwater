@@ -88,6 +88,7 @@ Matrix multiply(const Matrix& left, const Matrix& right);
 Matrix perspective(double aspect);
 Matrix view_matrix();
 Vec3 actor_position(const Actor& actor, double time);
+bool leaf_bubble_supported(const Vertex& leaf, const Instance& parent);
 Matrix leaf_bubble_transform(const Instance& bubble, const Vertex& leaf,
                              const Instance& parent, double time);
 Vec3 project(Vec3 point, double aspect);
