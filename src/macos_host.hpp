@@ -6,6 +6,8 @@ struct Options {
     bool muted{};
     bool paused{};
     bool smoke_tap{};
+    bool retained{true};
+    std::string verify_retained{};
     unsigned int fps{24};
     unsigned int samples{4};
     double render_scale{1};

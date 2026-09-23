@@ -46,12 +46,15 @@ not its full physically based pipeline.
 
 A static depth map retains fixed occluders. A moving-shadow refresh copies that map
 and draws moving casters, so previous fish positions cannot remain as stale shadows.
-Any instance edit conservatively rebuilds the fixed map. Moving maps refresh at 8 Hz
+An edit to a fixed instance rebuilds the fixed map. Moving maps refresh at 8 Hz
 or on a scene edit, while the visible scene is normally drawn at 24 Hz. These rates
 are deliberate approximations, not a claim that all optical changes are tracked.
 
-The final framebuffer still uses the **full-frame raster fallback**. Spatial queries
-currently scan retained bounds. There is no BVH or camera tile dependency graph yet.
+The default path now retains fixed camera visibility, lighting coefficients and
+receiver shadow visibility, as described in [the retained experiment](RETAINED_VISIBILITY.md).
+Moving surfaces still rasterize every frame and composition covers the entire view.
+`--full-redraw` selects the full-frame reference. General spatial queries still scan
+retained bounds. There is no BVH or camera tile dependency graph yet.
 
 ## Concrete algorithms and cost
 
@@ -84,16 +87,16 @@ currently scan retained bounds. There is no BVH or camera tile dependency graph 
   noise and damped bubble resonances; the tap uses damped glass resonances. AudioQueue
   callbacks copy loop segments rather than resynthesizing the sound.
 
-CPU persistence does not imply GPU persistence of the final image. The GPU still
-transforms and rasterizes submitted triangles, shades visible samples and resolves
-the image every animated frame. Lowering MSAA, resolution or frame rate changes
-quality; retaining/reusing more visibility and shading is a separate optimization.
+CPU persistence does not imply persistence of the final image. The GPU still
+transforms/rasterizes moving triangles, shades them, composes retained fixed surfaces
+and resolves every animated frame. Fixed-surface material work and camera acquisition
+now persist. Lowering MSAA, resolution or frame rate is a separate quality tradeoff.
 
 ## Incremental visibility and lighting to add
 
-A fixed camera can acquire visible surfaces through rasterization: depth, object ID,
-normal and material references per sample/tile. It does not need to sweep rays through
-every object to discover the environment on each update.
+The fixed-layer acquisition pass now stores depth, object identity, world shading
+position and lighting coefficients per covered sample. It does not sweep rays through
+every object. Extending this to changing local screen regions is the next step.
 
 A moved object invalidates its old and new projected footprints. Re-render those
 regions against candidate geometry, including newly exposed background. Its influence

@@ -51,10 +51,19 @@ A glass tap changes only nearby creature records; moving a plant or rock changes
 instance record. The static shadow map is cached. Moving shadows refresh at 8 Hz or
 on an edit. Explicit pause stops the frame timer and ambient audio.
 
-The visible image still uses full-frame rasterization. Sparse visibility repair,
-receiver-specific lighting invalidation, exact geometry picking, collision-aware
-fish routes, and a deeper extended environment remain development work. CPU use,
-GPU execution, compositor work, and memory are separate costs; see
+The fixed camera view now retains depth, surface identity, world shading positions,
+and material/lighting coefficients for sand, rocks, wood and other fixed imported
+surfaces. A separate cache retains direct-light visibility at those surfaces until
+the shadow map changes. Moving plants and animals rasterize against the retained
+depth each frame, preserving occlusion and newly exposed background. Caustics still
+animate at the original frame rate. `--full-redraw` selects the comparison renderer.
+
+Moving a fixed object conservatively rebuilds the fixed-view cache; moving a plant
+does not. Light intensity changes reuse the caches. The final composition still
+covers the whole view: local tile repair, receiver-specific shadow invalidation,
+exact moving-object picking, collision-aware fish routes, and a deeper environment
+remain development work. CPU, GPU, compositor and memory costs are measured
+separately; see [the retained experiment](docs/RETAINED_VISIBILITY.md) and
 [performance measurements](docs/PERFORMANCE.md).
 
 ## Source and art
@@ -85,6 +94,9 @@ See [third-party credits](THIRD_PARTY.md), [engine design](docs/ENGINE.md),
 ```sh
 python3 tools/measure.py --seconds 20
 python3 tools/measure.py --compare-gpu --seconds 15
+python3 tools/measure.py --compare-retained --seconds 20
+./build/Stillwater.app/Contents/MacOS/Stillwater --preview --muted --verify-retained artifacts/retained-verification
+python3 tools/compare_retained.py artifacts/retained-verification  # requires Pillow
 ./build/Stillwater.app/Contents/MacOS/Stillwater --preview --smoke-tap --quit-after 7 --metrics /tmp/stillwater.json
 cmake -S . -B build-sanitize -DSTILLWATER_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build build-sanitize -j4

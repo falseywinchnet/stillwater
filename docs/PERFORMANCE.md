@@ -14,7 +14,18 @@ The test window is 1180 by 728 image pixels. The desktop may render at a differe
 size (up to 1600 pixels wide), so these values do not certify full-screen cost.
 The top native control widget is present. Other applications remain running.
 
-## Current default build
+The retained renderer supersedes the full-redraw measurements below. See
+[retained visibility and lighting](RETAINED_VISIBILITY.md) for its implementation,
+image checks and memory tradeoff. The full-redraw mode remains available for
+comparisons at identical visual settings.
+
+The latest 1600×900 desktop comparison measured 8.14–8.31 ms/GPU frame for full
+redraw and 5.53–5.64 ms for retention, a 32.1% reduction in the two-run averages.
+CPU was 2.70–2.80% versus 3.05–3.10%; Metal allocation was 204.7 versus 418.0 MiB.
+The retained result trades extra memory and a small observed CPU increase for less
+GPU execution. Resolution, 24 fps animation and antialiasing were unchanged.
+
+## Original full-redraw build
 
 After adding closed-mesh back-face culling, three runs used 20-second warm sampling
 windows. [The receipt](evidence/performance.json) records executable and asset hashes.

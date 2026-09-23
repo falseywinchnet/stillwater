@@ -31,6 +31,10 @@ int main(int argc, char** argv) {
             options.paused = true;
         else if (std::strcmp(argument, "--smoke-tap") == 0)
             options.smoke_tap = true;
+        else if (std::strcmp(argument, "--full-redraw") == 0)
+            options.retained = false;
+        else if (std::strcmp(argument, "--verify-retained") == 0 && index + 1 < argc)
+            options.verify_retained = argv[++index];
         else if (std::strcmp(argument, "--capture") == 0 && index + 1 < argc)
             options.capture = argv[++index];
         else if (std::strcmp(argument, "--metrics") == 0 && index + 1 < argc)
@@ -64,6 +68,7 @@ int main(int argc, char** argv) {
             std::cout << "Stillwater [--desktop|--preview] [--muted] [--paused] [--fps 1..60]\n  "
                          "[--capture file.png] [--metrics file.json] [--quit-after seconds]\n  "
                          "[--msaa 2|4] [--render-scale 0.5..1]\n  "
+                         "[--full-redraw] [--verify-retained directory]\n  "
                          "[--export-tap file.wav] [--export-ambience file.wav]\n";
             return std::strcmp(argument, "--help") == 0 ? 0 : 2;
         }

@@ -67,9 +67,14 @@ def main():
     parser.add_argument("--seconds", type=float, default=20)
     parser.add_argument("--compare-gpu", action="store_true",
                         help="Compare optional quality/rate settings; defaults stay unchanged")
+    parser.add_argument("--compare-retained", action="store_true",
+                        help="Measure full/retained/retained/full at identical visual settings")
+    parser.add_argument("--desktop", action="store_true", help="Measure desktop placement instead of the preview")
     args = parser.parse_args()
     if not 1 <= args.seconds <= 3600:
         parser.error("--seconds must be between 1 and 3600")
+    if args.compare_gpu and args.compare_retained:
+        parser.error("choose one comparison")
     root = pathlib.Path(__file__).resolve().parents[1]
     (root / "artifacts").mkdir(exist_ok=True)
     report = {"machine": subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip(),
@@ -79,6 +84,7 @@ def main():
         for path in [root / "build/Stillwater.app/Contents/MacOS/Stillwater",
                      root / "assets/aquarium.metal", root / "assets/riverscape.swscene.gz"]
     }
+    report["placement"] = "desktop" if args.desktop else "preview"
     server = window_server()
     before, _ = process_time(server)
     start = time.monotonic()
@@ -93,10 +99,21 @@ def main():
                  ("gpu-eighteen-fps", ["--fps", "18"])]
         cases = [(label, ["--muted", "--capture", str(root / "artifacts" / (label + ".png")), *arguments])
                  for label, arguments in cases]
+    if args.compare_retained:
+        cases = [("full-before", ["--muted", "--full-redraw"]),
+                 ("retained-first", ["--muted"]), ("retained-second", ["--muted"]),
+                 ("full-after", ["--muted", "--full-redraw"])]
     for label, arguments in cases:
+        if args.desktop:
+            label = "desktop-" + label
+            arguments = [*arguments, "--desktop"]
         report["cases"][label] = measure(root, label, arguments, args.seconds)
         print(label, json.dumps(report["cases"][label]), flush=True)
     filename = "gpu-comparison.json" if args.compare_gpu else "performance.json"
+    if args.compare_retained:
+        filename = "retained-performance.json"
+    if args.desktop:
+        filename = "desktop-" + filename
     (root / "artifacts" / filename).write_text(json.dumps(report, indent=2)+"\n")
 
 

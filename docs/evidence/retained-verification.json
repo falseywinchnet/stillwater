@@ -1,0 +1,638 @@
+{
+  "image_limits": {
+    "mean_absolute_255_less_than": 0.01,
+    "maximum_255_at_most": 8
+  },
+  "cases": {
+    "retained-packed": {
+      "native": {
+        "failures": 0,
+        "comparisons": 15,
+        "visibility_builds": 5,
+        "light_visibility_builds": 12,
+        "queried_identity": 1
+      },
+      "pairs": {
+        "camera-shift": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013408564814814815,
+          "rms_255": 0.03677540693936038,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "429ecc16e2ae6bba103d7310cf34493a1b90c219b18c4cd867f5fcfc0cf42164",
+          "full_sha256": "7a7b0504e5651c23fe3f535e173e0a08c59fd8f430aaaf65d4f6efd9a9042406"
+        },
+        "camera-unchanged": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013587962962962963,
+          "rms_255": 0.037018513886572624,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "17b9108be643375deacec72ff001c7087a3cb9e05944047ed33a8ec1ee7f65da",
+          "full_sha256": "22aeb6a411dedc1baed7956b87b9ca4a5d08c699e1b235357bbe7ce621792961"
+        },
+        "escape": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014236111111111112,
+          "rms_255": 0.037883838047182934,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "f12456454afdc609786c90eed8e2cc4a4e128a00456e353802312ee6d8ef183c",
+          "full_sha256": "990c4a61e37c9bf0be58f55fbf1b3de12147145d9c5419168f654475ac19fed7"
+        },
+        "initial": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013865740740740741,
+          "rms_255": 0.03729884319524808,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "ea29836c4eec919d1eed7205882ca8db4c267782f545a8e9a5c6baafa1c729cb",
+          "full_sha256": "9ef66b4eb69ababc98522872c821d91c47d0084009ac0ad18fe1ed676a997418"
+        },
+        "light-dimmed": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0011261574074074073,
+          "rms_255": 0.03359274061791062,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "03f8ceb699e93e63c1df106c98c68fa3abda3521153f1b375c131b557a8ba32d",
+          "full_sha256": "0a271a3a0f51df171d7e71654b25cf08015b4c09e84de484bbfdce4b4ec1b353"
+        },
+        "light-unchanged": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0011064814814814815,
+          "rms_255": 0.03338537604001688,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "d38629753c0fc9d8a3c1b8730f4e72378e3464ce2f6a28e4245a11082de553b6",
+          "full_sha256": "323491cc58b7e5eebc7d1fb9e0ce2d57ce0f2da3ca1a7c97302061ab06894b09"
+        },
+        "moving": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013871527777777777,
+          "rms_255": 0.03779972810013908,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 5,
+          "passed": true,
+          "retained_sha256": "49701a58e51da265d7334fc6b033db5f461582fe3f37c6f769d40e4644db360f",
+          "full_sha256": "28a2c6aa432b5b1e35d3925441c85c6146ab2fb9ef3bc2e6fe4247b4391b9e60"
+        },
+        "plant-moved": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013900462962962963,
+          "rms_255": 0.03748456472459821,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "6a0d95f313a0a022e48f5347d99e25f1e554d27b2e8ca672c8aa51ffb2a09018",
+          "full_sha256": "863f9b2ba1706de85f1e244f659aff480c0d085fa4601712cea327a662d0b4d6"
+        },
+        "resized": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0011086764639406548,
+          "rms_255": 0.03348679110986212,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "53fa45e980a1539208fe03543ed217cdfe7276d477930eab21acdec006ae9cd7",
+          "full_sha256": "e73d290c0df868e8e9934631cd25e25df159e2a44a24754b96452de54c01b3ad"
+        },
+        "return-to-cache": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0011086764639406548,
+          "rms_255": 0.0335341222869969,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "cfc77c77eabb33cec16a01cb5d2f10932e6f3237e183c472d471d64763608312",
+          "full_sha256": "03d82b1d720a71ff6cd24359fdc86c9efc245cf40222fb0ab2444a42cd3519f2"
+        },
+        "reuse-light": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014114583333333334,
+          "rms_255": 0.03818055302938434,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 5,
+          "passed": true,
+          "retained_sha256": "f6489c5814eeb0a25a081359d90a67819ac88a2e41e075935d2906cb569c8719",
+          "full_sha256": "2ef026077c70a85544e0e419958faa2f93f88ad966f9f9ed631de1eecf3adc3d"
+        },
+        "rock-moved": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014947916666666666,
+          "rms_255": 0.038797014489949266,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "2d0ca08b5893813060138bc099c2158071e16322f40aea2fa283dab328e540e7",
+          "full_sha256": "aeb7a46bf5c762c4055e2da3e3ef5fddd1bbfa2c45d2113a16fd482f130d736c"
+        },
+        "rock-restored": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013900462962962963,
+          "rms_255": 0.03740729281243907,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "bc2cad0e2d25e2d75a978b119499e76ed876056299e6d76cef0adc34428c218d",
+          "full_sha256": "880217575c0daa3acba2f99285688a2f3579f4d42ba077e26c83a8c5e61bfcf4"
+        },
+        "tap": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013819444444444445,
+          "rms_255": 0.037329860949627425,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "95ababccd1d8e303dcb6f7c9160b702b93af6c342fa3918669b487c8a998d82a",
+          "full_sha256": "3c774d80b4951c675ff0cb2e9bd3cb448ca2d24bbfe8f4fe60f9913182c3af6b"
+        },
+        "time-rewound": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0010928155703220474,
+          "rms_255": 0.03308174208961657,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "e82d5bda83dbb5989dd5f2fad65f755b77c4da2a2b40fde51fda00ec3fa10991",
+          "full_sha256": "dfd0380a02398fa9093cb158d37cff71f99c1facc9effda6aa3f70e67ecee167"
+        }
+      },
+      "passed": true
+    },
+    "retained-packed-2x": {
+      "native": {
+        "failures": 0,
+        "comparisons": 15,
+        "visibility_builds": 5,
+        "light_visibility_builds": 12,
+        "queried_identity": 1
+      },
+      "pairs": {
+        "camera-shift": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013431712962962963,
+          "rms_255": 0.036806865804770314,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "010b710c7df4e62ab4bf9d478c677a9d12f7732e9f974359e0838952908ce444",
+          "full_sha256": "6d85bd282567181fff0b68e1e07bf8d14743219c860305ed7fd61a16ccc39952"
+        },
+        "camera-unchanged": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013524305555555555,
+          "rms_255": 0.036901081485707365,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "0568fe48d3576b06c13f7a0c9b6c87505b76e1dc1a78d3072673ca05d6488c85",
+          "full_sha256": "0744b91e294b93d828216e89706c8f6db04f180657caf7ca655f092f19bd7f88"
+        },
+        "escape": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014288194444444444,
+          "rms_255": 0.03790674473357342,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "41c3aa90b0cde1ff9f285fd9c905963b898332124fe3b8da57f8a36583f5d6b5",
+          "full_sha256": "a78f38cd9e81483c5ff76d99a6bfaacf61bd089331970d456735da7a2efe2184"
+        },
+        "initial": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014247685185185186,
+          "rms_255": 0.03782268572636739,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "c49d12ddf9fd62c7433d84e31b0cd7a2bf690f9b0484c4b57e4c6a8161d38aea",
+          "full_sha256": "ac01017671408744a4c5826c364030d8dc5072eca836e98ff9d13dd1240af467"
+        },
+        "light-dimmed": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.001113425925925926,
+          "rms_255": 0.03345464038011712,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "98ac9ce02ebe559a538a2495e42145d1f92e09b41cf43f18b48c906fd346cc88",
+          "full_sha256": "454634717e8861773eb4d02b553618cfd7a13af490e22c7a48d324f0864e0468"
+        },
+        "light-unchanged": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0010879629629629629,
+          "rms_255": 0.033071891388307385,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "09ade99e8df0b460dc756d959aad665929e51e341dcf6f22fe575259683458f4",
+          "full_sha256": "ce227ea34aef029575a9ea87b3015963015ad3155e78525cc577597f70da2dc9"
+        },
+        "moving": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014085648148148147,
+          "rms_255": 0.03809709816887487,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 5,
+          "passed": true,
+          "retained_sha256": "829daaebd7ff7661bd3a1a89350754b7cd5bf427c60b8ceaf33a824bfd9489eb",
+          "full_sha256": "290bf4f1b4a7445d73a0e73b5d7cd0665d864c95a523de5a94cd54e556cf1766"
+        },
+        "plant-moved": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014137731481481482,
+          "rms_255": 0.037738439485686406,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "1d53bf690a3791f70d25e7c36cc9b700fbd25f3c1b2cc152d0e2babf8be345e2",
+          "full_sha256": "f6dc5ffad60060acc0fa5229a766b5f755cb2090afff18dbe11f559904c35dfa"
+        },
+        "resized": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0010944016596839082,
+          "rms_255": 0.033201387117004794,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "fb33f75b2eeb69d054e9ab48e273c8e30e15b849a4bc0cc6ff80a131ac022597",
+          "full_sha256": "b7fd5b498ebdfbe3bedf74d683bc5d3e372fac14cbfd11b7167178c87b3fb527"
+        },
+        "return-to-cache": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0010864712128746045,
+          "rms_255": 0.03312965195119969,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "191c9ece899a2010f69d39ca1ea8e72c1621a7ef3746cad58f8adabb3cd880c6",
+          "full_sha256": "10982c65690d73467019c44d9c4fe8d199d3d0c53c84adab79c019ef3b161ba0"
+        },
+        "reuse-light": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014149305555555556,
+          "rms_255": 0.03818055302938434,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 5,
+          "passed": true,
+          "retained_sha256": "d012382cd13984c67b9abcbbffc2ee4af45706195035f8779b0dd66376748eb0",
+          "full_sha256": "e6e2959d0f9fd5706dcd0a789ec6706605b34a29811a96ccef923927697f62fb"
+        },
+        "rock-moved": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0015011574074074074,
+          "rms_255": 0.03884918608232686,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "ac4c85d0c823f4aaa98430415f1de8c9c0babed2dec2c38c73cb9669636cd399",
+          "full_sha256": "43a11b982d0bc6328021fcf3eac6824f21685a6f5b4e7be77e5c13d48c1e10fd"
+        },
+        "rock-restored": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.001394675925925926,
+          "rms_255": 0.03743822071587231,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "a1bedac35d1423333ca4ceb8c40e8e195b87ba7ea3def8d507b269e0275e13f9",
+          "full_sha256": "e7ec4773828243fbeadece42e31659643e0718009d259206bb24e88c0113f7ef"
+        },
+        "tap": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.001398726851851852,
+          "rms_255": 0.0374768447029481,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "d8c4061b84ebb3a8f4068362f980f464169181471028f6c4f2764409d2682bac",
+          "full_sha256": "9cab2e3ad66b1f12e0c5f37a9877df683b571441762c0cd26933ed32ca3fb39c"
+        },
+        "time-rewound": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0010618868277657632,
+          "rms_255": 0.03263524178690093,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "75fc84576f3875d5a522db0759859cfd197b98c0678196d4a23129ceeda157ac",
+          "full_sha256": "bbe02cc94e118a91abb409be953e3bca66a6b15ba22c76fe65511d49bed191eb"
+        }
+      },
+      "passed": true
+    },
+    "retained-packed-sanitizer": {
+      "native": {
+        "failures": 0,
+        "comparisons": 15,
+        "visibility_builds": 5,
+        "light_visibility_builds": 12,
+        "queried_identity": 1
+      },
+      "pairs": {
+        "camera-shift": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013408564814814815,
+          "rms_255": 0.03677540693936038,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "429ecc16e2ae6bba103d7310cf34493a1b90c219b18c4cd867f5fcfc0cf42164",
+          "full_sha256": "7a7b0504e5651c23fe3f535e173e0a08c59fd8f430aaaf65d4f6efd9a9042406"
+        },
+        "camera-unchanged": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013587962962962963,
+          "rms_255": 0.037018513886572624,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "17b9108be643375deacec72ff001c7087a3cb9e05944047ed33a8ec1ee7f65da",
+          "full_sha256": "22aeb6a411dedc1baed7956b87b9ca4a5d08c699e1b235357bbe7ce621792961"
+        },
+        "escape": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014236111111111112,
+          "rms_255": 0.037883838047182934,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "f12456454afdc609786c90eed8e2cc4a4e128a00456e353802312ee6d8ef183c",
+          "full_sha256": "990c4a61e37c9bf0be58f55fbf1b3de12147145d9c5419168f654475ac19fed7"
+        },
+        "initial": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013865740740740741,
+          "rms_255": 0.03729884319524808,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "ea29836c4eec919d1eed7205882ca8db4c267782f545a8e9a5c6baafa1c729cb",
+          "full_sha256": "9ef66b4eb69ababc98522872c821d91c47d0084009ac0ad18fe1ed676a997418"
+        },
+        "light-dimmed": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0011261574074074073,
+          "rms_255": 0.03359274061791062,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "03f8ceb699e93e63c1df106c98c68fa3abda3521153f1b375c131b557a8ba32d",
+          "full_sha256": "0a271a3a0f51df171d7e71654b25cf08015b4c09e84de484bbfdce4b4ec1b353"
+        },
+        "light-unchanged": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0011064814814814815,
+          "rms_255": 0.03338537604001688,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "d38629753c0fc9d8a3c1b8730f4e72378e3464ce2f6a28e4245a11082de553b6",
+          "full_sha256": "323491cc58b7e5eebc7d1fb9e0ce2d57ce0f2da3ca1a7c97302061ab06894b09"
+        },
+        "moving": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013871527777777777,
+          "rms_255": 0.03779972810013908,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 5,
+          "passed": true,
+          "retained_sha256": "49701a58e51da265d7334fc6b033db5f461582fe3f37c6f769d40e4644db360f",
+          "full_sha256": "28a2c6aa432b5b1e35d3925441c85c6146ab2fb9ef3bc2e6fe4247b4391b9e60"
+        },
+        "plant-moved": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013900462962962963,
+          "rms_255": 0.03748456472459821,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "6a0d95f313a0a022e48f5347d99e25f1e554d27b2e8ca672c8aa51ffb2a09018",
+          "full_sha256": "863f9b2ba1706de85f1e244f659aff480c0d085fa4601712cea327a662d0b4d6"
+        },
+        "resized": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0011086764639406548,
+          "rms_255": 0.03348679110986212,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "53fa45e980a1539208fe03543ed217cdfe7276d477930eab21acdec006ae9cd7",
+          "full_sha256": "e73d290c0df868e8e9934631cd25e25df159e2a44a24754b96452de54c01b3ad"
+        },
+        "return-to-cache": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0011086764639406548,
+          "rms_255": 0.0335341222869969,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "cfc77c77eabb33cec16a01cb5d2f10932e6f3237e183c472d471d64763608312",
+          "full_sha256": "03d82b1d720a71ff6cd24359fdc86c9efc245cf40222fb0ab2444a42cd3519f2"
+        },
+        "reuse-light": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014114583333333334,
+          "rms_255": 0.03818055302938434,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 5,
+          "passed": true,
+          "retained_sha256": "f6489c5814eeb0a25a081359d90a67819ac88a2e41e075935d2906cb569c8719",
+          "full_sha256": "2ef026077c70a85544e0e419958faa2f93f88ad966f9f9ed631de1eecf3adc3d"
+        },
+        "rock-moved": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0014947916666666666,
+          "rms_255": 0.038797014489949266,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "2d0ca08b5893813060138bc099c2158071e16322f40aea2fa283dab328e540e7",
+          "full_sha256": "aeb7a46bf5c762c4055e2da3e3ef5fddd1bbfa2c45d2113a16fd482f130d736c"
+        },
+        "rock-restored": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013900462962962963,
+          "rms_255": 0.03740729281243907,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 3,
+          "passed": true,
+          "retained_sha256": "bc2cad0e2d25e2d75a978b119499e76ed876056299e6d76cef0adc34428c218d",
+          "full_sha256": "880217575c0daa3acba2f99285688a2f3579f4d42ba077e26c83a8c5e61bfcf4"
+        },
+        "tap": {
+          "size": [
+            960,
+            600
+          ],
+          "mean_absolute_255": 0.0013819444444444445,
+          "rms_255": 0.037329860949627425,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "95ababccd1d8e303dcb6f7c9160b702b93af6c342fa3918669b487c8a998d82a",
+          "full_sha256": "3c774d80b4951c675ff0cb2e9bd3cb448ca2d24bbfe8f4fe60f9913182c3af6b"
+        },
+        "time-rewound": {
+          "size": [
+            813,
+            517
+          ],
+          "mean_absolute_255": 0.0010928155703220474,
+          "rms_255": 0.03308174208961657,
+          "fraction_over_eight": 0.0,
+          "maximum_255": 2,
+          "passed": true,
+          "retained_sha256": "e82d5bda83dbb5989dd5f2fad65f755b77c4da2a2b40fde51fda00ec3fa10991",
+          "full_sha256": "dfd0380a02398fa9093cb158d37cff71f99c1facc9effda6aa3f70e67ecee167"
+        }
+      },
+      "passed": true
+    }
+  },
+  "source_sha256": {
+    "assets/aquarium.metal": "8ddaee38c5f3e74b3d4ac5282234931d2bf3ac0de7d0b48f588abd93bbdcd8bf",
+    "src/metal_renderer.cpp": "4ba4548aa3f9ff0d6f8587c6dd973825cbec00db973e00327ecf49eb4c6f6afd",
+    "src/metal_renderer.hpp": "5f9b27bf070b2d8fc4a1e961ecf29aa597d1069e6f71c4ce190580a6595e8958",
+    "src/renderer_verification.cpp": "a49f40f98c5fb4b5121cec299204cc9f7242840c5ce84ea5bb24d2acfc418641",
+    "src/macos_host.cpp": "b24c1d5c058df2a157b202a272aa48b083457b0feb23c072ce7205f48e5a5f31",
+    "build/Stillwater.app/Contents/MacOS/Stillwater": "fc3181493f8d8222e9da187ae085896c1b8a9c2b1d792a2aa1b97f526703d352",
+    "build-sanitize/Stillwater.app/Contents/MacOS/Stillwater": "b03bda4ef5683e65e72d0203ee22971711d8645afd0952bc3281980312884cda"
+  }
+}

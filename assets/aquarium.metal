@@ -5,11 +5,12 @@ using namespace metal;
 struct Vertex { float4 position;float4 normal;float4 color;float4 uv;float4 anchor;float4 bend;float4 along;float4 binding; };
 struct Instance { float4x4 transform;float4 color;float4 behavior;float4 anatomy; };
 struct Actor { float4 center;float4 cruise;float4 startled_from;float4 escape;float4 traits; };
-struct Uniforms { float4x4 camera;float4x4 light;float4 clock;float4 eye; };
+struct Uniforms { float4x4 camera;float4x4 light;float4 clock;float4 eye;float4 illumination; };
 struct Out {
     float4 position [[position]];
     float3 world;float3 normal;float3 local;
     float4 color;float4 behavior;float4 light_position;float4 uv;float4 surface;
+    uint identity [[flat]];
 };
 float3 water_color(float2 uv) {
     return float3(0.0055f,0.023f,0.015f) * (0.82f+0.18f*uv.y);
@@ -124,7 +125,7 @@ vertex Out tank_vertex(uint vertex_id [[vertex_id]],uint instance_id [[instance_
                        constant Actor* actors [[buffer(2)]],constant Uniforms& u [[buffer(3)]]) {
     Vertex sample=vertices[vertex_id];
     uint index=sample.binding.y>0.5f ? uint(sample.binding.x) : instance_id;
-    return prepare(sample,instances[index],actors,u);
+    Out out=prepare(sample,instances[index],actors,u);out.identity=index+1;return out;
 }
 vertex float4 shadow_vertex(uint vertex_id [[vertex_id]],uint instance_id [[instance_id]],
                             constant Vertex* vertices [[buffer(0)]],constant Instance* instances [[buffer(1)]],
@@ -200,9 +201,10 @@ float3 fish_skin(Out in) {
     if(part<9.5f) return float3(0.036f,0.020f,0.018f);
     return float3(0.175f,0.168f,0.132f);
 }
-float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
- texture2d<float> sand,texture2d<float> sand_normal,texture2d<float> rock,texture2d<float> rock_normal,
- texture2d<float> wood,texture2d<float> wood_normal,bool front) {
+struct Surface { float3 normal; float3 albedo; float alpha; };
+Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_normal,
+ texture2d<float> rock,texture2d<float> rock_normal,texture2d<float> wood,
+ texture2d<float> wood_normal,bool front) {
     constexpr sampler surface_sampler(coord::normalized,address::repeat,filter::linear,mip_filter::linear,max_anisotropy(8));
     int material=int(in.behavior.x+0.5f);
     float3 normal=normalize(front ? in.normal : -in.normal),albedo=in.color.rgb;
@@ -233,8 +235,94 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
     }
     if(material==11 || material==12) albedo=fish_skin(in);
     if(material==12) alpha=0.55f+0.35f*(1-in.uv.w);
+    return {normal,albedo,alpha};
+}
+struct LightingTerms { float3 base; float3 surface; float direct; float caustic; };
+LightingTerms fixed_lighting(Out in,Surface surface,constant Uniforms& u) {
+    float3 n=surface.normal,albedo=surface.albedo;
+    float3 light=normalize(float3(0,0.9138f,0.4061f));
+    float3 hemisphere=mix(float3(0.035f,0.028f,0.016f),float3(0.10f,0.13f,0.085f),n.y*0.5f+0.5f);
+    float3 base=albedo*hemisphere+albedo*float3(0.06f,0.085f,0.10f)*max(0.0f,dot(n,normalize(float3(1,5,10))));
+    float direct=max(0.0f,dot(n,light));
+    int material=int(in.behavior.x+0.5f);
+    float caustic=material>=7 && material<=9 ? max(n.y,0.0f) : 0.0f;
+    float depth=max(0.0f,length(u.eye.xyz-in.world)-16);
+    float fog=1-exp(-depth*depth*0.001156f);
+    float3 transmission=exp(-float3(0.030f,0.006f,0.016f)*depth)*(1-fog);
+    return {base*transmission+water_color(float2(0.5f))*fog,albedo*transmission,direct,caustic};
+}
+float3 illuminate_fixed(LightingTerms terms,float3 world,constant Uniforms& u,float visible) {
+    float2 q=world.xz*2;
+    float wave=sin(q.x+sin(q.y*1.4f+u.clock.x*0.2f))+sin(q.y+sin(q.x*1.2f-u.clock.x*0.17f));
+    float caustic=pow(max(0.0f,1-abs(wave)*1.8f),8.0f);
+    float3 direct=terms.surface*float3(1.43f,1.39f,1.28f)*terms.direct;
+    float3 focused=terms.surface*float3(0.18f,0.25f,0.13f)*terms.caustic;
+    float3 linear=terms.base+(direct+focused*caustic)*(visible*u.illumination.x);
+    return pow(aces(linear),float3(1.0f/2.2f));
+}
+struct CachedSurface {
+    half4 base [[color(0)]];
+    half4 surface [[color(1)]];
+    float4 world_identity [[color(2)]];
+};
+fragment CachedSurface retain_surface(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],
+ texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
+ texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
+ texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
+    Surface surface=riverscape_surface(in,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
+    LightingTerms terms=fixed_lighting(in,surface,u);
+    return {half4(half3(terms.base),half(terms.direct)),half4(half3(terms.surface),half(terms.caustic)),
+            float4(in.world,float(in.identity))};
+}
+struct RestoredSurface { float4 color [[color(0)]]; float depth [[depth(any)]]; };
+fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[sample_id]],
+ constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
+ texture2d_ms<half> base [[texture(1)]],texture2d_ms<half> surface [[texture(2)]],
+ texture2d_ms<float> world_identity [[texture(4)]],
+ depth2d_ms<float> depth [[texture(5)]],texture2d_ms<half> light_visibility [[texture(6)]]) {
+    uint2 pixel=uint2(in.position.xy);
+    float z=depth.read(pixel,sample);
+    if(z>=1) {
+        float3 color=pow(max(1-exp(-water_color(in.uv)*1.6f),0.0f),float3(1.0f/2.2f));
+        return {float4(color,1),1};
+    }
+    float4 cached_base=float4(base.read(pixel,sample)),cached_surface=float4(surface.read(pixel,sample));
+    LightingTerms terms={cached_base.rgb,cached_surface.rgb,cached_base.a,cached_surface.a};
+    return {float4(illuminate_fixed(terms,world_identity.read(pixel,sample).xyz,u,float(light_visibility.read(pixel,sample).r)),1),z};
+}
+// This source-to-receiver visibility is recomputed only when its shadow map or
+// retained camera surfaces change; animated caustics remain evaluated every frame.
+fragment half retain_light_visibility(WaterOut in [[stage_in]],uint sample [[sample_id]],
+ constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
+ texture2d_ms<float> world_identity [[texture(4)]],depth2d_ms<float> depth [[texture(5)]]) {
+    uint2 pixel=uint2(in.position.xy);
+    if(depth.read(pixel,sample)>=1) return half(1);
+    return half(visibility(u.light*float4(world_identity.read(pixel,sample).xyz,1),shadow));
+}
+struct VisibilityProbe { float4 samples[4]; float4 depths; };
+kernel void query_visibility(texture2d_ms<float> world_identity [[texture(0)]],
+ depth2d_ms<float> depth [[texture(1)]],constant uint2& pixel [[buffer(0)]],
+ device VisibilityProbe& result [[buffer(1)]]) {
+    result.depths=float4(1);
+    for(uint index=0;index<4;++index) {
+        result.samples[index]=float4(0);
+        if(index<world_identity.get_num_samples()) {
+            result.samples[index]=world_identity.read(pixel,index);
+            result.depths[index]=depth.read(pixel,index);
+        }
+    }
+}
+float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
+ texture2d<float> sand,texture2d<float> sand_normal,texture2d<float> rock,texture2d<float> rock_normal,
+ texture2d<float> wood,texture2d<float> wood_normal,bool front) {
+    Surface surface=riverscape_surface(in,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
+    float3 normal=surface.normal,albedo=surface.albedo;
+    float alpha=surface.alpha;
+    int material=int(in.behavior.x+0.5f);
+    if(material==7 || material==8 || material==9 || material==13 || material==14)
+        return float4(illuminate_fixed(fixed_lighting(in,surface,u),in.world,u,visibility(in.light_position,shadow)),1);
     float3 light=normalize(float3(0,0.9138f,0.4061f)),view=normalize(u.eye.xyz-in.world);
-    float direct=max(0.0f,dot(normal,light)),visibility_value=visibility(in.light_position,shadow);
+    float direct=max(0.0f,dot(normal,light)),visibility_value=visibility(in.light_position,shadow)*u.illumination.x;
     float3 hemisphere=mix(float3(0.035f,0.028f,0.016f),float3(0.10f,0.13f,0.085f),normal.y*0.5f+0.5f);
     float3 color=albedo*(hemisphere+float3(1.43f,1.39f,1.28f)*direct*visibility_value);
     color+=albedo*float3(0.06f,0.085f,0.10f)*max(0.0f,dot(normal,normalize(float3(1,5,10))));
@@ -294,7 +382,7 @@ fragment float4 tank_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(
         }
     }
     if(material==5) albedo*=0.7f+0.3f*cos(in.local.x*55);
-    float shadow_factor=visibility(in.light_position,shadow);
+    float shadow_factor=visibility(in.light_position,shadow)*u.illumination.x;
     float direct=max(dot(n,light),0.0f);
     float transmission=material==2 ? 0.24f*max(dot(-n,light),0.0f) : 0.0f;
     float3 color=albedo*(0.12f+float3(1.10f,1.13f,0.84f)*(direct*shadow_factor+transmission));

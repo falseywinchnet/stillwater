@@ -2,6 +2,11 @@
 
 Verified on Apple M4 / macOS 26.5 on 2026-09-23. This is a local development build.
 
+The subsequent retained-visibility implementation is verified separately in
+[RETAINED_VISIBILITY.md](RETAINED_VISIBILITY.md): 15 native reference-image pairs,
+cache invalidation/reuse assertions, fixed-surface identity queries, and native
+ASan/UBSan checks. The evidence below describes the initial prototype.
+
 - Release and ASan/UBSan builds completed; `scene_and_sound` passed in both.
   Checks cover retained identities, valid indices, local tap effects, continuity,
   one-record mutations, malformed-archive rejection without state loss, reload,

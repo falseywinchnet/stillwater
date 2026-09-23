@@ -26,7 +26,17 @@ struct Uniforms {
     Matrix light;
     Float4 clock;
     Float4 eye;
+    Float4 illumination;
 };
+bool moving_instance(const Instance& instance) {
+    const int material = static_cast<int>(instance.behavior.x);
+    return instance.behavior.w >= 0 || material == 2 || material == 3 || material == 10;
+}
+bool retained_instance(const Instance& instance) {
+    const int material = static_cast<int>(instance.behavior.x);
+    return !moving_instance(instance) &&
+           (material == 7 || material == 8 || material == 9 || material == 13 || material == 14);
+}
 Matrix light_matrix() {
     const double c = 0.9138115, s = 0.4061385;
     Matrix view{{1, 0, 0, 0, 0, static_cast<float>(s), static_cast<float>(c), 0, 0,
@@ -103,6 +113,15 @@ bool save_png(id texture, id queue, unsigned int width, unsigned int height, con
 Renderer::~Renderer() {
     for (const id material : materials_)
         release(material);
+    for (const id texture : visibility_)
+        release(texture);
+    release(visibility_depth_);
+    release(light_visibility_);
+    release(light_visibility_pipeline_);
+    release(query_pipeline_);
+    release(visibility_pipeline_);
+    release(restore_pipeline_);
+    release(restore_depth_state_);
     release(previous_command_);
     release(color_);
     release(shadow_);
@@ -142,6 +161,10 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         return false;
     }
     samples_ = samples;
+    source_vertices_ = scene.vertices().data();
+    source_indices_ = scene.indices().data();
+    source_instances_ = scene.instances().size();
+    source_actors_ = scene.actors().size();
     layer_ = apple::retain(layer);
     device_ = MTLCreateSystemDefaultDevice();
     if (device_ == nil) {
@@ -192,6 +215,47 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
     if (background_pipeline_ == nil)
         error_ = error_text(error);
+    id restore = send<id>(library, "newFunctionWithName:", string("restore_surface"));
+    send<void>(descriptor, "setFragmentFunction:", restore);
+    restore_pipeline_ =
+        send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
+    if (restore_pipeline_ == nil)
+        error_ = error_text(error);
+    release(restore);
+    id light_visibility =
+        send<id>(library, "newFunctionWithName:", string("retain_light_visibility"));
+    send<void>(descriptor, "setFragmentFunction:", light_visibility);
+    send<void>(descriptor, "setDepthAttachmentPixelFormat:", 0UL);
+    send<void>(attachment, "setPixelFormat:", 25UL);
+    light_visibility_pipeline_ =
+        send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
+    if (light_visibility_pipeline_ == nil)
+        error_ = error_text(error);
+    release(light_visibility);
+    send<void>(descriptor, "setDepthAttachmentPixelFormat:", 252UL);
+    id query = send<id>(library, "newFunctionWithName:", string("query_visibility"));
+    query_pipeline_ =
+        send<id>(device_, "newComputePipelineStateWithFunction:error:", query, &error);
+    if (query_pipeline_ == nil)
+        error_ = error_text(error);
+    release(query);
+    id retain = send<id>(library, "newFunctionWithName:", string("retain_surface"));
+    send<void>(descriptor, "setVertexFunction:", vertex);
+    send<void>(descriptor, "setFragmentFunction:", retain);
+    for (unsigned long index = 0; index < 3; ++index) {
+        id color_attachment =
+            send<id>(send<id>(descriptor, "colorAttachments"), "objectAtIndexedSubscript:", index);
+        send<void>(color_attachment, "setPixelFormat:", index == 2 ? 125UL : 115UL);
+    }
+    visibility_pipeline_ =
+        send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
+    if (visibility_pipeline_ == nil)
+        error_ = error_text(error);
+    release(retain);
+    for (unsigned long index = 1; index < 3; ++index)
+        send<void>(
+            send<id>(send<id>(descriptor, "colorAttachments"), "objectAtIndexedSubscript:", index),
+            "setPixelFormat:", 0UL);
     send<void>(descriptor, "setVertexFunction:", shadow_vertex);
     send<void>(descriptor, "setFragmentFunction:", static_cast<id>(nil));
     send<void>(attachment, "setPixelFormat:", 0UL);
@@ -207,12 +271,16 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     release(background_vertex);
     release(background_fragment);
     release(library);
-    if (pipeline_ == nil || shadow_pipeline_ == nil || background_pipeline_ == nil)
+    if (pipeline_ == nil || shadow_pipeline_ == nil || background_pipeline_ == nil ||
+        visibility_pipeline_ == nil || restore_pipeline_ == nil ||
+        light_visibility_pipeline_ == nil || query_pipeline_ == nil)
         return false;
     descriptor = apple::make("MTLDepthStencilDescriptor");
     send<void>(descriptor, "setDepthCompareFunction:", 1UL);
     send<void>(descriptor, "setDepthWriteEnabled:", static_cast<BOOL>(YES));
     depth_state_ = send<id>(device_, "newDepthStencilStateWithDescriptor:", descriptor);
+    send<void>(descriptor, "setDepthCompareFunction:", 7UL);
+    restore_depth_state_ = send<id>(device_, "newDepthStencilStateWithDescriptor:", descriptor);
     release(descriptor);
     const unsigned long vertex_bytes = scene.vertices().size() * sizeof(Vertex),
                         index_bytes = scene.indices().size() * sizeof(std::uint32_t),
@@ -315,9 +383,9 @@ void Renderer::upload_actors(const Scene& scene) {
     revision_ = scene.statistics().revision;
     statistics_.actor_upload_bytes += bytes;
 }
-void Renderer::upload_edits(id command, const Scene& scene) {
+bool Renderer::upload_edits(id command, const Scene& scene) {
     if (revision_ == scene.statistics().revision)
-        return;
+        return true;
     id blit = send<id>(command, "blitCommandEncoder");
     bool complete = true;
     for (std::size_t index = 0; index < scene.actors().size(); ++index) {
@@ -349,30 +417,124 @@ void Renderer::upload_edits(id command, const Scene& scene) {
         send<void>(blit, "copyFromBuffer:sourceOffset:toBuffer:destinationOffset:size:", staging,
                    0UL, instances_, static_cast<unsigned long>(index * sizeof(Instance)),
                    static_cast<unsigned long>(sizeof(Instance)));
+        if (retained_instance(scene.instances()[index]))
+            visibility_ready_ = false;
+        if (!moving_instance(scene.instances()[index]))
+            fixed_shadow_ready_ = false;
         statistics_.instance_patch_bytes += sizeof(Instance);
         release(staging);
     }
     send<void>(blit, "endEncoding");
     if (complete)
         revision_ = scene.statistics().revision;
+    else
+        error_ = "Cannot stage scene edits";
+    return complete;
+}
+void Renderer::set_retained(bool enabled) {
+    retained_ = enabled;
+    if (enabled && width_ != 0 && visibility_depth_ == nil)
+        resize(width_, height_);
+}
+std::uint64_t Renderer::allocated_gpu_bytes() const {
+    return device_ == nil ? 0 : send<unsigned long>(device_, "currentAllocatedSize");
+}
+void Renderer::set_camera(const Matrix& view, Float4 eye) {
+    if (view.values == view_.values && eye.x == eye_.x && eye.y == eye_.y && eye.z == eye_.z)
+        return;
+    view_ = view;
+    eye_ = eye;
+    visibility_ready_ = false;
+}
+bool Renderer::set_light_intensity(float intensity) {
+    if (!std::isfinite(intensity) || intensity < 0 || intensity > 10)
+        return false;
+    if (light_intensity_ == intensity)
+        return true;
+    light_intensity_ = intensity;
+    return true;
+}
+bool Renderer::query_fixed_visibility(unsigned int x, unsigned int y, VisibilityProbe& result) {
+    // Explicit, synchronous diagnostic query. No readback occurs during animation.
+    if (!visibility_ready_ || x >= width_ || y >= height_)
+        return false;
+    static_assert(sizeof(VisibilityProbe) == 80);
+    apple::Pool pool{};
+    id buffer = send<id>(device_, "newBufferWithLength:options:", 80UL, 0UL);
+    if (buffer == nil)
+        return false;
+    const std::array<unsigned int, 2> pixel{x, y};
+    id command = send<id>(queue_, "commandBuffer");
+    id encoder = send<id>(command, "computeCommandEncoder");
+    send<void>(encoder, "setComputePipelineState:", query_pipeline_);
+    send<void>(encoder, "setTexture:atIndex:", visibility_[2], 0UL);
+    send<void>(encoder, "setTexture:atIndex:", visibility_depth_, 1UL);
+    send<void>(encoder, "setBytes:length:atIndex:", static_cast<const void*>(pixel.data()), 8UL,
+               0UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", buffer, 0UL, 1UL);
+    struct Size {
+        unsigned long width, height, depth;
+    };
+    send<void>(encoder, "dispatchThreadgroups:threadsPerThreadgroup:", Size{1, 1, 1},
+               Size{1, 1, 1});
+    send<void>(encoder, "endEncoding");
+    send<void>(command, "commit");
+    send<void>(command, "waitUntilCompleted");
+    const bool success = send<unsigned long>(command, "status") == 4UL;
+    if (success)
+        std::memcpy(&result, send<void*>(buffer, "contents"), sizeof(result));
+    else
+        error_ = error_text(send<id>(command, "error"));
+    release(buffer);
+    return success;
 }
 void Renderer::resize(unsigned int width, unsigned int height) {
-    if (width == width_ && height == height_)
+    if (width == width_ && height == height_ && (!retained_ || visibility_depth_ != nil))
         return;
+    if (width == 0 || height == 0 || width > 4096 || height > 4096) {
+        error_ = "Invalid render dimensions";
+        return;
+    }
     id replacement = make_texture(252UL, width, height, 4UL, samples_);
-    if (replacement == nil)
-        return;
     id color = make_texture(80UL, width, height, 4UL, samples_);
-    if (color == nil) {
+    id visibility_depth = retained_ ? make_texture(252UL, width, height, 5UL, samples_) : nil;
+    id light_visibility = retained_ ? make_texture(25UL, width, height, 5UL, samples_) : nil;
+    std::array<id, 3> visibility{};
+    bool complete = replacement != nil && color != nil &&
+                    (!retained_ || (visibility_depth != nil && light_visibility != nil));
+    for (std::size_t index = 0; retained_ && index < visibility.size(); ++index) {
+        visibility[index] = make_texture(index == 2 ? 125UL : 115UL, width, height, 5UL, samples_);
+        complete = complete && visibility[index] != nil;
+    }
+    if (!complete) {
         release(replacement);
+        release(color);
+        release(visibility_depth);
+        release(light_visibility);
+        for (const id texture : visibility)
+            release(texture);
+        error_ = "Cannot allocate retained view buffers";
         return;
     }
     release(depth_);
     release(color_);
+    release(visibility_depth_);
+    for (const id texture : visibility_)
+        release(texture);
     depth_ = replacement;
     color_ = color;
+    visibility_depth_ = visibility_depth;
+    release(light_visibility_);
+    light_visibility_ = light_visibility;
+    light_visibility_ready_ = false;
+    visibility_ = visibility;
+    visibility_ready_ = false;
     width_ = width;
     height_ = height;
+    statistics_.render_width = width;
+    statistics_.render_height = height;
+    statistics_.retained_bytes =
+        retained_ ? static_cast<std::uint64_t>(width) * height * samples_ * 38 : 0;
     send<void>(layer_, "setDrawableSize:", CGSizeMake(width, height));
 }
 void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, const void* uniforms,
@@ -385,7 +547,7 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
     send<void>(encoder, "setVertexBuffer:offset:atIndex:", instances_, 0UL, 1UL);
     send<void>(encoder, "setVertexBuffer:offset:atIndex:", actors_, 0UL, 2UL);
     send<void>(encoder, "setVertexBytes:length:atIndex:", uniforms, uniform_size, 3UL);
-    if (pipeline == pipeline_) {
+    if (pipeline == pipeline_ || pipeline == visibility_pipeline_) {
         send<void>(encoder, "setFragmentBytes:length:atIndex:", uniforms, uniform_size, 3UL);
         send<void>(encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
         for (std::size_t index = 0; index < materials_.size(); ++index)
@@ -395,10 +557,19 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
     for (const Batch& batch : scene.batches()) {
         const Instance& instance = scene.instances()[batch.first_instance];
         const int material = static_cast<int>(instance.behavior.x);
-        const bool moving =
-            instance.behavior.w >= 0 || material == 2 || material == 3 || material == 10;
+        const bool moving = moving_instance(instance);
         if ((draw_set == DrawSet::fixed && moving) || (draw_set == DrawSet::moving && !moving))
             continue;
+        const bool cached = retained_instance(instance);
+        if ((draw_set == DrawSet::retained_surface && !cached) ||
+            (draw_set == DrawSet::uncached_surface && cached))
+            continue;
+        if (pipeline == pipeline_ || pipeline == visibility_pipeline_) {
+            if (moving)
+                ++statistics_.moving_camera_draws;
+            else
+                ++statistics_.fixed_camera_draws;
+        }
         send<void>(encoder, "setFrontFacingWinding:", material >= 7 ? 1UL : 0UL);
         // Imported rock shells and fish bodies are closed, outward-wound meshes.
         // Keep foliage, fins and all other materials two-sided.
@@ -414,10 +585,21 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
     send<void>(encoder, "endEncoding");
 }
 bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
-    if (width_ == 0 || height_ == 0)
+    if (scene.vertices().data() != source_vertices_ || scene.indices().data() != source_indices_ ||
+        scene.instances().size() != source_instances_ || scene.actors().size() != source_actors_) {
+        error_ = "Scene storage replaced; recreate the renderer before drawing";
+        return false;
+    }
+    if (width_ == 0 || height_ == 0 || (retained_ && visibility_depth_ == nil))
         return false;
     const Clock::time_point start = Clock::now();
     apple::Pool pool{};
+    if (previous_command_ != nil && send<unsigned long>(previous_command_, "status") == 5UL) {
+        visibility_ready_ = false;
+        fixed_shadow_ready_ = false;
+        error_ = error_text(send<id>(previous_command_, "error"));
+        return false;
+    }
     if (previous_command_ != nil && send<unsigned long>(previous_command_, "status") == 4UL) {
         const double began = send<double>(previous_command_, "GPUStartTime"),
                      ended = send<double>(previous_command_, "GPUEndTime");
@@ -440,16 +622,17 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
     if (drawable == nil)
         return false;
     const Uniforms uniforms{
-        multiply(perspective(static_cast<double>(width_) / height_), view_matrix()),
+        multiply(perspective(static_cast<double>(width_) / height_), view_),
         light_matrix(),
         {static_cast<float>(time), static_cast<float>(width_), static_cast<float>(height_), 0},
-        {0, 4.65F, 20.5F, 0}};
+        eye_,
+        {light_intensity_, 0, 0, 0}};
     id command = send<id>(queue_, "commandBuffer");
-    upload_edits(command, scene);
+    if (!upload_edits(command, scene))
+        return false;
     id encoder = nil;
     id attachment = nil;
-    const bool rebuild_fixed =
-        !fixed_shadow_ready_ || shadow_instance_edits_ != scene.statistics().instance_edits;
+    const bool rebuild_fixed = !fixed_shadow_ready_;
     if (rebuild_fixed) {
         id fixed_pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
         attachment = send<id>(fixed_pass, "depthAttachment");
@@ -461,12 +644,11 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         encode_geometry(encoder, scene, shadow_pipeline_, &uniforms, sizeof(uniforms),
                         DrawSet::fixed);
         fixed_shadow_ready_ = true;
-        shadow_instance_edits_ = scene.statistics().instance_edits;
         ++statistics_.static_shadow_builds;
     }
     // Direct-light visibility is retained. Moving casters refresh at 8 Hz or on edits;
     // their depth pass starts from the cached static occluders, never yesterday's fish.
-    if (rebuild_fixed || time - shadow_time_ >= 0.125 ||
+    if (rebuild_fixed || time < shadow_time_ || time - shadow_time_ >= 0.125 ||
         shadow_revision_ != scene.statistics().revision) {
         id blit = send<id>(command, "blitCommandEncoder");
         send<void>(blit, "copyFromTexture:toTexture:", fixed_shadow_, shadow_);
@@ -484,6 +666,55 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         ++statistics_.dynamic_shadow_frames;
         previous_updated_shadows_ = true;
     }
+    if (!retained_ && previous_updated_shadows_)
+        light_visibility_ready_ = false;
+    if (retained_) {
+        if (!visibility_ready_) {
+            id visibility_pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
+            for (unsigned long index = 0; index < visibility_.size(); ++index) {
+                id target = send<id>(send<id>(visibility_pass, "colorAttachments"),
+                                     "objectAtIndexedSubscript:", index);
+                send<void>(target, "setTexture:", visibility_[index]);
+                send<void>(target, "setLoadAction:", 2UL);
+                send<void>(target, "setStoreAction:", 1UL);
+                send<void>(target, "setClearColor:", ClearColor{0, 0, 0, 0});
+            }
+            id target = send<id>(visibility_pass, "depthAttachment");
+            send<void>(target, "setTexture:", visibility_depth_);
+            send<void>(target, "setLoadAction:", 2UL);
+            send<void>(target, "setStoreAction:", 1UL);
+            send<void>(target, "setClearDepth:", 1.0);
+            id visibility_encoder =
+                send<id>(command, "renderCommandEncoderWithDescriptor:", visibility_pass);
+            encode_geometry(visibility_encoder, scene, visibility_pipeline_, &uniforms,
+                            sizeof(uniforms), DrawSet::retained_surface);
+            visibility_ready_ = true;
+            ++statistics_.visibility_builds;
+            light_visibility_ready_ = false;
+        } else
+            ++statistics_.visibility_reuses;
+    }
+    if (retained_ && (!light_visibility_ready_ || previous_updated_shadows_)) {
+        id light_pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
+        id target =
+            send<id>(send<id>(light_pass, "colorAttachments"), "objectAtIndexedSubscript:", 0UL);
+        send<void>(target, "setTexture:", light_visibility_);
+        send<void>(target, "setLoadAction:", 0UL);
+        send<void>(target, "setStoreAction:", 1UL);
+        id light_encoder = send<id>(command, "renderCommandEncoderWithDescriptor:", light_pass);
+        send<void>(light_encoder, "setRenderPipelineState:", light_visibility_pipeline_);
+        send<void>(light_encoder,
+                   "setFragmentBytes:length:atIndex:", static_cast<const void*>(&uniforms),
+                   static_cast<unsigned long>(sizeof(uniforms)), 3UL);
+        send<void>(light_encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
+        send<void>(light_encoder, "setFragmentTexture:atIndex:", visibility_[2], 4UL);
+        send<void>(light_encoder, "setFragmentTexture:atIndex:", visibility_depth_, 5UL);
+        send<void>(light_encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
+        send<void>(light_encoder, "endEncoding");
+        light_visibility_ready_ = true;
+        ++statistics_.light_visibility_builds;
+    } else if (retained_)
+        ++statistics_.light_visibility_reuses;
     id pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
     attachment = send<id>(send<id>(pass, "colorAttachments"), "objectAtIndexedSubscript:", 0UL);
     id texture = send<id>(drawable, "texture");
@@ -498,11 +729,22 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
     send<void>(attachment, "setStoreAction:", 0UL);
     send<void>(attachment, "setClearDepth:", 1.0);
     encoder = send<id>(command, "renderCommandEncoderWithDescriptor:", pass);
-    send<void>(encoder, "setRenderPipelineState:", background_pipeline_);
+    send<void>(encoder,
+               "setRenderPipelineState:", retained_ ? restore_pipeline_ : background_pipeline_);
     send<void>(encoder, "setFragmentBytes:length:atIndex:", static_cast<const void*>(&uniforms),
                static_cast<unsigned long>(sizeof(uniforms)), 3UL);
+    if (retained_) {
+        send<void>(encoder, "setDepthStencilState:", restore_depth_state_);
+        send<void>(encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
+        for (unsigned long index = 0; index < visibility_.size(); ++index)
+            send<void>(encoder, "setFragmentTexture:atIndex:", visibility_[index],
+                       index == 2 ? 4UL : index + 1);
+        send<void>(encoder, "setFragmentTexture:atIndex:", visibility_depth_, 5UL);
+        send<void>(encoder, "setFragmentTexture:atIndex:", light_visibility_, 6UL);
+    }
     send<void>(encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
-    encode_geometry(encoder, scene, pipeline_, &uniforms, sizeof(uniforms));
+    encode_geometry(encoder, scene, pipeline_, &uniforms, sizeof(uniforms),
+                    retained_ ? DrawSet::uncached_surface : DrawSet::all);
     send<void>(command, "presentDrawable:", drawable);
     send<void>(command, "commit");
     previous_command_ = apple::retain(command);
@@ -510,6 +752,12 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
     statistics_.cpu_submit_seconds += std::chrono::duration<double>(Clock::now() - start).count();
     if (capture_path != nullptr) {
         send<void>(command, "waitUntilCompleted");
+        if (send<unsigned long>(command, "status") == 5UL) {
+            error_ = error_text(send<id>(command, "error"));
+            visibility_ready_ = false;
+            fixed_shadow_ready_ = false;
+            return false;
+        }
         return save_png(texture, queue_, width_, height_, capture_path);
     }
     return true;

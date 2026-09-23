@@ -1,6 +1,7 @@
 #include "macos_host.hpp"
 #include "macos_audio.hpp"
 #include "metal_renderer.hpp"
+#include "renderer_verification.hpp"
 #include <CoreGraphics/CoreGraphics.h>
 #include <algorithm>
 #include <chrono>
@@ -163,6 +164,16 @@ void print_metrics() {
            << ",\n  \"instance_patch_bytes\": " << render.instance_patch_bytes
            << ",\n  \"static_shadow_builds\": " << render.static_shadow_builds
            << ",\n  \"dynamic_shadow_frames\": " << render.dynamic_shadow_frames
+           << ",\n  \"visibility_builds\": " << render.visibility_builds
+           << ",\n  \"visibility_reuses\": " << render.visibility_reuses
+           << ",\n  \"light_visibility_builds\": " << render.light_visibility_builds
+           << ",\n  \"light_visibility_reuses\": " << render.light_visibility_reuses
+           << ",\n  \"retained_bytes\": " << render.retained_bytes
+           << ",\n  \"gpu_allocated_bytes\": " << state.renderer.allocated_gpu_bytes()
+           << ",\n  \"render_width\": " << render.render_width
+           << ",\n  \"render_height\": " << render.render_height
+           << ",\n  \"fixed_camera_draws\": " << render.fixed_camera_draws
+           << ",\n  \"moving_camera_draws\": " << render.moving_camera_draws
            << ",\n  \"actor_edits\": " << scene.actor_edits << ",\n  \"taps\": " << state.taps
            << ",\n  \"paused\": " << (state.paused ? "true" : "false")
            << ",\n  \"desktop\": " << (state.options.desktop ? "true" : "false")
@@ -177,7 +188,10 @@ void print_metrics() {
            << ",\n  \"window_level\": " << send<long>(state.window, "level")
            << ",\n  \"ignores_mouse\": "
            << (send<BOOL>(state.window, "ignoresMouseEvents") ? "true" : "false")
-           << ",\n  \"raster_mode\": \"full-frame fallback\"\n}\n";
+           << ",\n  \"raster_mode\": \""
+           << (state.renderer.retained() ? "retained fixed visibility and lighting"
+                                         : "full-frame fallback")
+           << "\"\n}\n";
 }
 void request_quit() {
     Host& state = *host;
@@ -306,6 +320,11 @@ void frame(void*) {
     if (!state.options.capture.empty() && !state.captured && state.scene_time() > 3)
         capture = state.options.capture.c_str();
     const bool success = state.renderer.draw(state.scene, state.scene_time(), capture);
+    if (!success && !state.renderer.error().empty()) {
+        std::cerr << "Renderer: " << state.renderer.error() << '\n';
+        request_quit();
+        return;
+    }
     if (capture != nullptr && success) {
         state.captured = true;
         std::cout << "Captured " << capture << '\n';
@@ -424,6 +443,7 @@ int run_macos(const Options& options) {
     Host state{};
     host = &state;
     state.options = options;
+    state.renderer.set_retained(options.retained);
     state.paused = options.paused;
     Class delegate_class =
         objc_allocateClassPair(objc_getClass("NSObject"), "StillwaterDelegate", 0);
@@ -509,28 +529,36 @@ int run_macos(const Options& options) {
     send<void>(center, "addObserver:selector:name:object:", state.delegate,
                sel_registerName("waking:"), string("NSWorkspaceDidWakeNotification"),
                static_cast<id>(nil));
+    bool verification_ok = true;
+    if (!options.verify_retained.empty())
+        verification_ok =
+            verify_retained_renderer(state.renderer, state.scene, options.verify_retained);
     state.began = Clock::now();
     state.pause_started = 0;
-    state.renderer.draw(state.scene, 0,
-                        options.paused && !options.capture.empty() ? options.capture.c_str()
-                                                                   : nullptr);
-    if (!options.muted && !state.paused)
-        state.audio.set_ambience(true);
-    start_frames();
-    if (options.quit_after > 0 && std::isfinite(options.quit_after)) {
-        state.quit_timer =
-            dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-        dispatch_source_set_event_handler_f(state.quit_timer, &quit_timer);
-        dispatch_source_set_timer(
-            state.quit_timer,
-            dispatch_time(DISPATCH_TIME_NOW, static_cast<std::int64_t>(options.quit_after * 1e9)),
-            DISPATCH_TIME_FOREVER, 10000000ULL);
-        dispatch_resume(state.quit_timer);
+    if (options.verify_retained.empty()) {
+        state.renderer.draw(state.scene, 0,
+                            options.paused && !options.capture.empty() ? options.capture.c_str()
+                                                                       : nullptr);
+        if (!options.muted && !state.paused)
+            state.audio.set_ambience(true);
+        start_frames();
+        if (options.quit_after > 0 && std::isfinite(options.quit_after)) {
+            state.quit_timer =
+                dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+            dispatch_source_set_event_handler_f(state.quit_timer, &quit_timer);
+            dispatch_source_set_timer(
+                state.quit_timer,
+                dispatch_time(DISPATCH_TIME_NOW,
+                              static_cast<std::int64_t>(options.quit_after * 1e9)),
+                DISPATCH_TIME_FOREVER, 10000000ULL);
+            dispatch_resume(state.quit_timer);
+        }
+        std::cout << "Stillwater: " << state.scene.objects().size() << " retained objects; "
+                  << state.scene.actors().size() << " creatures; " << options.fps
+                  << (options.retained ? " fps retained fixed visibility.\n"
+                                       : " fps full redraw.\n");
+        send<void>(state.app, "run");
     }
-    std::cout << "Stillwater: " << state.scene.objects().size() << " retained objects; "
-              << state.scene.actors().size() << " creatures; " << options.fps
-              << " fps raster fallback.\n";
-    send<void>(state.app, "run");
     stop_source(state.frames);
     stop_source(state.quit_timer);
     send<void>(center, "removeObserver:", state.delegate);
@@ -546,6 +574,6 @@ int run_macos(const Options& options) {
     release(state.layer);
     release(state.delegate);
     host = nullptr;
-    return 0;
+    return verification_ok ? 0 : 1;
 }
 } // namespace stillwater
