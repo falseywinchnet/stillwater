@@ -9,6 +9,11 @@ surface textures into a new renderer; its lighting and fish behavior are not yet
 exact reproduction. There is no image-generation content, video backdrop, web view,
 Swift, SwiftUI, or CloudKit in the app.
 
+The active MacBook Neo working copy and carried task context are documented in
+[the local handoff](docs/NEO_HANDOFF.md). The current renderer uses a compact
+position cache and memoryless temporary targets on Apple GPUs; see
+[Metal storage and Neo verification](docs/METAL_STORAGE.md).
+
 ## Run
 
 On macOS with Xcode command-line tools and CMake:

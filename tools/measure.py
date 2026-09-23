@@ -28,11 +28,15 @@ def window_server():
     raise RuntimeError("WindowServer not found")
 
 
-def measure(root, label, arguments, seconds):
-    metrics = root / "artifacts" / (label + ".json")
-    executable = root / "build/Stillwater.app/Contents/MacOS/Stillwater"
+def measure(root, label, arguments, seconds, executable=None, output_directory=None):
+    if output_directory is None:
+        output_directory = root / "artifacts"
+    output_directory.mkdir(parents=True, exist_ok=True)
+    metrics = output_directory / (label + ".json")
+    if executable is None:
+        executable = root / "build/Stillwater.app/Contents/MacOS/Stillwater"
     command = [str(executable), "--preview", "--metrics", str(metrics), "--quit-after", str(seconds + 7), *arguments]
-    with (root / "artifacts" / (label + ".log")).open("w") as log:
+    with (output_directory / (label + ".log")).open("w") as log:
         process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
         try:
             time.sleep(4)

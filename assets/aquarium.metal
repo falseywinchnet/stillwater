@@ -5,7 +5,7 @@ using namespace metal;
 struct Vertex { float4 position;float4 normal;float4 color;float4 uv;float4 anchor;float4 bend;float4 along;float4 binding; };
 struct Instance { float4x4 transform;float4 color;float4 behavior;float4 anatomy; };
 struct Actor { float4 center;float4 cruise;float4 startled_from;float4 escape;float4 traits; };
-struct Uniforms { float4x4 camera;float4x4 light;float4 clock;float4 eye;float4 illumination; };
+struct Uniforms { float4x4 camera;float4x4 light;float4x4 reconstruction;float4 clock;float4 eye;float4 illumination; };
 struct Out {
     float4 position [[position]];
     float3 world;float3 normal;float3 local;
@@ -263,7 +263,8 @@ float3 illuminate_fixed(LightingTerms terms,float3 world,constant Uniforms& u,fl
 struct CachedSurface {
     half4 base [[color(0)]];
     half4 surface [[color(1)]];
-    float4 world_identity [[color(2)]];
+    float2 distance_identity [[color(2)]];
+    half2 center_correction [[color(3)]];
 };
 fragment CachedSurface retain_surface(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],
  texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
@@ -271,14 +272,28 @@ fragment CachedSurface retain_surface(Out in [[stage_in]],constant Uniforms& u [
  texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
     Surface surface=riverscape_surface(in,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
     LightingTerms terms=fixed_lighting(in,surface,u);
+    float4 clip=u.camera*float4(in.world,1);
+    float2 center=in.position.xy/u.clock.yz*float2(2,-2)+float2(-1,1);
+    // Preserve the raster interpolator's small displacement from the ideal ray.
+    // Without this correction, rare hard-shadow edges change by several codes.
+    half2 correction=half2(clip.xy/clip.w-center);
     return {half4(half3(terms.base),half(terms.direct)),half4(half3(terms.surface),half(terms.caustic)),
-            float4(in.world,float(in.identity))};
+            float2(clip.w,float(in.identity)),correction};
+}
+// Camera acquisition shades at pixel centers, whereas raster depth varies per
+// MSAA sample. Retain the center's linear camera distance: unprojecting the
+// per-sample depth would move caustics and shadow receivers at polygon edges.
+float3 retained_world(uint2 pixel,float distance,float2 correction,
+                      constant float4x4& reconstruction,float2 dimensions) {
+    float2 ndc=(float2(pixel)+0.5f)/dimensions*float2(2,-2)+float2(-1,1);
+    float4 world=reconstruction*float4((ndc+correction)*distance,-distance,1);
+    return world.xyz/world.w;
 }
 struct RestoredSurface { float4 color [[color(0)]]; float depth [[depth(any)]]; };
 fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[sample_id]],
  constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
  texture2d_ms<half> base [[texture(1)]],texture2d_ms<half> surface [[texture(2)]],
- texture2d_ms<float> world_identity [[texture(4)]],
+ texture2d_ms<float> distance_identity [[texture(4)]],texture2d_ms<half> center_correction [[texture(7)]],
  depth2d_ms<float> depth [[texture(5)]],texture2d_ms<half> light_visibility [[texture(6)]]) {
     uint2 pixel=uint2(in.position.xy);
     float z=depth.read(pixel,sample);
@@ -288,26 +303,41 @@ fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[
     }
     float4 cached_base=float4(base.read(pixel,sample)),cached_surface=float4(surface.read(pixel,sample));
     LightingTerms terms={cached_base.rgb,cached_surface.rgb,cached_base.a,cached_surface.a};
-    return {float4(illuminate_fixed(terms,world_identity.read(pixel,sample).xyz,u,float(light_visibility.read(pixel,sample).r)),1),z};
+    float distance=distance_identity.read(pixel,sample).r;
+    float2 correction=float2(center_correction.read(pixel,sample).rg);
+    float3 world=retained_world(pixel,distance,correction,u.reconstruction,u.clock.yz);
+    float visible=float(light_visibility.read(pixel,sample).r);
+    float3 color=illuminate_fixed(terms,world,u,visible);
+    return {float4(color,1),z};
 }
 // This source-to-receiver visibility is recomputed only when its shadow map or
 // retained camera surfaces change; animated caustics remain evaluated every frame.
 fragment half retain_light_visibility(WaterOut in [[stage_in]],uint sample [[sample_id]],
  constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
- texture2d_ms<float> world_identity [[texture(4)]],depth2d_ms<float> depth [[texture(5)]]) {
+ texture2d_ms<float> distance_identity [[texture(4)]],texture2d_ms<half> center_correction [[texture(7)]],depth2d_ms<float> depth [[texture(5)]]) {
     uint2 pixel=uint2(in.position.xy);
     if(depth.read(pixel,sample)>=1) return half(1);
-    return half(visibility(u.light*float4(world_identity.read(pixel,sample).xyz,1),shadow));
+    float distance=distance_identity.read(pixel,sample).r;
+    float2 correction=float2(center_correction.read(pixel,sample).rg);
+    float3 world=retained_world(pixel,distance,correction,u.reconstruction,u.clock.yz);
+    float visible=visibility(u.light*float4(world,1),shadow);
+    return half(visible);
 }
 struct VisibilityProbe { float4 samples[4]; float4 depths; };
-kernel void query_visibility(texture2d_ms<float> world_identity [[texture(0)]],
- depth2d_ms<float> depth [[texture(1)]],constant uint2& pixel [[buffer(0)]],
- device VisibilityProbe& result [[buffer(1)]]) {
+kernel void query_visibility(texture2d_ms<float> distance_identity [[texture(0)]],
+ depth2d_ms<float> depth [[texture(1)]],texture2d_ms<half> center_correction [[texture(2)]],constant uint2& pixel [[buffer(0)]],
+ device VisibilityProbe& result [[buffer(1)]],constant float4x4& reconstruction [[buffer(2)]],
+ constant float4& dimensions [[buffer(3)]]) {
     result.depths=float4(1);
     for(uint index=0;index<4;++index) {
         result.samples[index]=float4(0);
-        if(index<world_identity.get_num_samples()) {
-            result.samples[index]=world_identity.read(pixel,index);
+        if(index<distance_identity.get_num_samples()) {
+            float2 cached=distance_identity.read(pixel,index).rg;
+            if(cached.y!=0) {
+                float2 correction=float2(center_correction.read(pixel,index).rg);
+                float3 world=retained_world(pixel,cached.x,correction,reconstruction,dimensions.xy);
+                result.samples[index]=float4(world,cached.y);
+            }
             result.depths[index]=depth.read(pixel,index);
         }
     }

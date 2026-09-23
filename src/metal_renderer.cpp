@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <simd/simd.h>
 extern "C" id MTLCreateSystemDefaultDevice();
 namespace stillwater {
 using apple::release;
@@ -15,6 +16,11 @@ using apple::string;
 using apple::type;
 namespace {
 using Clock = std::chrono::steady_clock;
+// RGBA16F base/direct, RGBA16F surface/caustic, RG32F distance/identity,
+// RG16F interpolation correction. Depth32F and R16F visibility add six bytes.
+constexpr std::array<unsigned long, 4> visibility_formats{115, 115, 105, 65};
+constexpr std::array<unsigned long, 4> visibility_slots{1, 2, 4, 7};
+constexpr std::uint64_t retained_bytes_per_sample = 34;
 struct ClearColor {
     double red{}, green{}, blue{}, alpha{1};
 };
@@ -24,6 +30,7 @@ struct Region {
 struct Uniforms {
     Matrix camera;
     Matrix light;
+    Matrix reconstruction;
     Float4 clock;
     Float4 eye;
     Float4 illumination;
@@ -140,13 +147,15 @@ Renderer::~Renderer() {
     release(layer_);
 }
 id Renderer::make_texture(unsigned long format, unsigned int width, unsigned int height,
-                          unsigned long usage, unsigned long samples) {
+                          unsigned long usage, unsigned long samples, bool transient) {
     id descriptor = send<id>(type("MTLTextureDescriptor"),
                              "texture2DDescriptorWithPixelFormat:width:height:mipmapped:", format,
                              static_cast<unsigned long>(width), static_cast<unsigned long>(height),
                              static_cast<BOOL>(NO));
     send<void>(descriptor, "setUsage:", usage);
-    send<void>(descriptor, "setStorageMode:", 2UL);
+    // Only pass-local color/depth targets may use tile memory. Retained surfaces,
+    // shadow maps, and anything sampled by a later pass require backing storage.
+    send<void>(descriptor, "setStorageMode:", transient && memoryless_supported_ ? 3UL : 2UL);
     if (samples > 1) {
         send<void>(descriptor, "setTextureType:", 4UL);
         send<void>(descriptor, "setSampleCount:", samples);
@@ -172,6 +181,7 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         return false;
     }
     queue_ = send<id>(device_, "newCommandQueue");
+    memoryless_supported_ = send<BOOL>(device_, "supportsFamily:", 1001L) != NO;
     send<void>(layer_, "setDevice:", device_);
     send<void>(layer_, "setPixelFormat:", 80UL);
     send<void>(layer_, "setFramebufferOnly:", static_cast<BOOL>(NO));
@@ -242,17 +252,17 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     id retain = send<id>(library, "newFunctionWithName:", string("retain_surface"));
     send<void>(descriptor, "setVertexFunction:", vertex);
     send<void>(descriptor, "setFragmentFunction:", retain);
-    for (unsigned long index = 0; index < 3; ++index) {
+    for (unsigned long index = 0; index < visibility_formats.size(); ++index) {
         id color_attachment =
             send<id>(send<id>(descriptor, "colorAttachments"), "objectAtIndexedSubscript:", index);
-        send<void>(color_attachment, "setPixelFormat:", index == 2 ? 125UL : 115UL);
+        send<void>(color_attachment, "setPixelFormat:", visibility_formats[index]);
     }
     visibility_pipeline_ =
         send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
     if (visibility_pipeline_ == nil)
         error_ = error_text(error);
     release(retain);
-    for (unsigned long index = 1; index < 3; ++index)
+    for (unsigned long index = 1; index < visibility_formats.size(); ++index)
         send<void>(
             send<id>(send<id>(descriptor, "colorAttachments"), "objectAtIndexedSubscript:", index),
             "setPixelFormat:", 0UL);
@@ -444,7 +454,25 @@ void Renderer::set_camera(const Matrix& view, Float4 eye) {
         return;
     view_ = view;
     eye_ = eye;
+    update_reconstruction();
     visibility_ready_ = false;
+}
+void Renderer::update_reconstruction() {
+    // Invert only when the camera or output dimensions change, never per pixel
+    // or per frame. This maps (ndc.x * distance, ndc.y * distance, -distance, 1)
+    // from camera space to world space, including projection x/y scaling.
+    if (width_ == 0 || height_ == 0)
+        return;
+    simd_float4x4 native_view{};
+    static_assert(sizeof(native_view) == sizeof(view_));
+    std::memcpy(&native_view, &view_, sizeof(native_view));
+    const simd_float4x4 inverse = simd_inverse(native_view);
+    std::memcpy(&reconstruction_, &inverse, sizeof(reconstruction_));
+    const Matrix projection = perspective(static_cast<double>(width_) / height_);
+    for (std::size_t row = 0; row < 4; ++row) {
+        reconstruction_.values[row] /= projection.values[0];
+        reconstruction_.values[4 + row] /= projection.values[5];
+    }
 }
 bool Renderer::set_light_intensity(float intensity) {
     if (!std::isfinite(intensity) || intensity < 0 || intensity > 10)
@@ -469,9 +497,15 @@ bool Renderer::query_fixed_visibility(unsigned int x, unsigned int y, Visibility
     send<void>(encoder, "setComputePipelineState:", query_pipeline_);
     send<void>(encoder, "setTexture:atIndex:", visibility_[2], 0UL);
     send<void>(encoder, "setTexture:atIndex:", visibility_depth_, 1UL);
+    send<void>(encoder, "setTexture:atIndex:", visibility_[3], 2UL);
     send<void>(encoder, "setBytes:length:atIndex:", static_cast<const void*>(pixel.data()), 8UL,
                0UL);
     send<void>(encoder, "setBuffer:offset:atIndex:", buffer, 0UL, 1UL);
+    send<void>(encoder, "setBytes:length:atIndex:", static_cast<const void*>(&reconstruction_),
+               static_cast<unsigned long>(sizeof(reconstruction_)), 2UL);
+    const Float4 dimensions{static_cast<float>(width_), static_cast<float>(height_), 0, 0};
+    send<void>(encoder, "setBytes:length:atIndex:", static_cast<const void*>(&dimensions),
+               static_cast<unsigned long>(sizeof(dimensions)), 3UL);
     struct Size {
         unsigned long width, height, depth;
     };
@@ -495,15 +529,15 @@ void Renderer::resize(unsigned int width, unsigned int height) {
         error_ = "Invalid render dimensions";
         return;
     }
-    id replacement = make_texture(252UL, width, height, 4UL, samples_);
-    id color = make_texture(80UL, width, height, 4UL, samples_);
+    id replacement = make_texture(252UL, width, height, 4UL, samples_, true);
+    id color = make_texture(80UL, width, height, 4UL, samples_, true);
     id visibility_depth = retained_ ? make_texture(252UL, width, height, 5UL, samples_) : nil;
     id light_visibility = retained_ ? make_texture(25UL, width, height, 5UL, samples_) : nil;
-    std::array<id, 3> visibility{};
+    std::array<id, 4> visibility{};
     bool complete = replacement != nil && color != nil &&
                     (!retained_ || (visibility_depth != nil && light_visibility != nil));
     for (std::size_t index = 0; retained_ && index < visibility.size(); ++index) {
-        visibility[index] = make_texture(index == 2 ? 125UL : 115UL, width, height, 5UL, samples_);
+        visibility[index] = make_texture(visibility_formats[index], width, height, 5UL, samples_);
         complete = complete && visibility[index] != nil;
     }
     if (!complete) {
@@ -531,10 +565,15 @@ void Renderer::resize(unsigned int width, unsigned int height) {
     visibility_ready_ = false;
     width_ = width;
     height_ = height;
+    update_reconstruction();
     statistics_.render_width = width;
     statistics_.render_height = height;
     statistics_.retained_bytes =
-        retained_ ? static_cast<std::uint64_t>(width) * height * samples_ * 38 : 0;
+        retained_ ? static_cast<std::uint64_t>(width) * height * samples_ * retained_bytes_per_sample
+                  : 0;
+    statistics_.memoryless_targets = memoryless_supported_;
+    statistics_.transient_backing_bytes =
+        memoryless_supported_ ? 0 : static_cast<std::uint64_t>(width) * height * samples_ * 8;
     send<void>(layer_, "setDrawableSize:", CGSizeMake(width, height));
 }
 void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, const void* uniforms,
@@ -624,6 +663,7 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
     const Uniforms uniforms{
         multiply(perspective(static_cast<double>(width_) / height_), view_),
         light_matrix(),
+        reconstruction_,
         {static_cast<float>(time), static_cast<float>(width_), static_cast<float>(height_), 0},
         eye_,
         {light_intensity_, 0, 0, 0}};
@@ -708,6 +748,7 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
                    static_cast<unsigned long>(sizeof(uniforms)), 3UL);
         send<void>(light_encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
         send<void>(light_encoder, "setFragmentTexture:atIndex:", visibility_[2], 4UL);
+        send<void>(light_encoder, "setFragmentTexture:atIndex:", visibility_[3], 7UL);
         send<void>(light_encoder, "setFragmentTexture:atIndex:", visibility_depth_, 5UL);
         send<void>(light_encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
         send<void>(light_encoder, "endEncoding");
@@ -738,7 +779,7 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         send<void>(encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
         for (unsigned long index = 0; index < visibility_.size(); ++index)
             send<void>(encoder, "setFragmentTexture:atIndex:", visibility_[index],
-                       index == 2 ? 4UL : index + 1);
+                       visibility_slots[index]);
         send<void>(encoder, "setFragmentTexture:atIndex:", visibility_depth_, 5UL);
         send<void>(encoder, "setFragmentTexture:atIndex:", light_visibility_, 6UL);
     }

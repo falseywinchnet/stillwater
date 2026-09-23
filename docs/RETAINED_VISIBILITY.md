@@ -82,7 +82,7 @@ textures; a fresh full-redraw process does not allocate those textures.
 Switching paths within the verification harness also tests light-cache invalidation
 while the reference path advances the shadow map.
 
-## Verification
+## Original M4 verification
 
 The native `--verify-retained` harness creates 15 exact-time image pairs: initial
 view, animation, unchanged shadow reuse, a tap, escape, a moved/restored rock, a moved
@@ -122,7 +122,7 @@ image at time zero: only two RGB channel values changed, each by one. This
 separately checks the shared expression instead of relying only on agreement
 between two paths that call it.
 
-## Desktop performance
+## M4 desktop performance before storage reduction
 
 On the local Apple M4/macOS 26.5, four sequential desktop runs used the order
 full, retained, retained, full. Every run rendered 1600×900 at 24 fps with the same
@@ -154,24 +154,33 @@ unpacked preview experiment is retained separately as
 
 ## Memory and remaining work
 
-The cache uses two RGBA16F coefficient textures, one
-RGBA32F world-position/identity texture, depth32F and R16F light visibility: 38 bytes
-per MSAA sample before allocation padding. At 1180×728 and four samples this is
-124.5 MiB of additional logical GPU storage, down from 150.7 MiB in the first
-working version. This change leaves antialiasing unchanged. `gpu_allocated_bytes` reports Metal's
-device allocation counter separately from process RSS; do not add them as though
-they were disjoint physical-memory totals.
+The current Neo continuation uses two RGBA16F coefficient textures, RG32F camera
+distance/identity, RG16F interpolation correction, depth32F and R16F light
+visibility: **34 bytes per MSAA sample** before allocation padding. The original
+M4 implementation documented above used 38 bytes, including a 16-byte world
+position/identity record. Shading positions are reconstructed from distance and
+the inverse camera, with the small raster interpolation correction preserved.
+Per-sample raster depths remain independent, unchanged depth32F values.
 
-At the tested 1600×900 desktop size the packed cache is 208.7 MiB logically, with
-about 213.4 MiB added to Metal's allocation counter including padding/overhead.
+On Apple-family GPUs, the main pass's temporary multisample color and depth
+attachments now use memoryless storage. They are resolved or discarded within
+the same render pass. Retained surfaces, receiver visibility and shadow maps keep
+ordinary backing storage because later passes read them. Other GPU families
+retain the private-storage fallback; that fallback was not exercised on the Neo.
 
-Further representation changes may reduce memory. Local damage
-repair and conservative source-to-receiver region tracking are the next architectural
-steps. They must retain this full redraw as an image-correctness reference. Dense
-foliage and broadly animated light can still make a full pass cheaper than sparse
-bookkeeping.
+See [Metal storage on the Neo](METAL_STORAGE.md) for the native allocation
+measurements, 17-case verification at both sample counts, original-renderer query
+comparisons and the reason for preserving the interpolation correction.
+`gpu_allocated_bytes` reports Metal's device allocation counter separately from
+process RSS; they overlap on unified memory and must not be added as independent
+physical-memory totals.
 
-The MSAA retention uses standard shader-readable multisample textures, documented
-in Apple's [MSAA sample](https://developer.apple.com/documentation/metal/improving-edge-rendering-quality-with-multisample-antialiasing-msaa).
-The local implementation and native measurements, rather than that sample, establish
-the behavior and costs reported here.
+Local damage repair and conservative source-to-receiver region tracking remain
+architectural next steps. They must retain full redraw as an image-correctness
+reference. Dense foliage and broadly animated light can still make a full pass
+cheaper than sparse bookkeeping.
+
+The retained MSAA textures use standard shader-readable multisample storage,
+documented in Apple's [MSAA sample](https://developer.apple.com/documentation/metal/improving-edge-rendering-quality-with-multisample-antialiasing-msaa).
+Temporary attachments follow Apple's [memoryless storage contract](https://developer.apple.com/documentation/metal/mtlstoragemode/memoryless).
+The implementation and native measurements establish the behavior reported here.

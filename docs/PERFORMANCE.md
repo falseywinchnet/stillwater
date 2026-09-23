@@ -1,5 +1,8 @@
 # Performance evidence
 
+The measurements below describe the M4 implementation before the Neo storage
+change. Current on-device results are in [METAL_STORAGE.md](METAL_STORAGE.md).
+
 Measured locally on an Apple M4 running macOS 26.5, 2026-09-23. These are short
 development measurements, not battery-life or power measurements.
 

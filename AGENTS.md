@@ -26,3 +26,19 @@ A rich, interactive desktop aquarium with very low recurring CPU work.
 - Direct-light shadow queries are admitted. Caustic approximations must be
   labeled; no claim of physically solved optical transport from an image effect.
 - Test behavioral boundaries and sound/sample safety; inspect the native app.
+
+## MacBook Neo continuation
+
+- The authoritative working tree is `/Users/ultimussecundai/stillwater`; read
+  `docs/NEO_HANDOFF.md` and `docs/METAL_STORAGE.md` before further optimization.
+- The target is an A18 Pro with 8 GiB unified memory. Measure on this device;
+  do not substitute the M4 timings or reduce quality without naming that tradeoff.
+- Keep per-sample raster depth distinct from the shading-center distance and its
+  interpolation correction. Removing the correction fails an existing 2× MSAA
+  image tolerance at a shadow boundary.
+- Only pass-local color/depth attachments may be memoryless. Camera retention,
+  light visibility and shadow maps need storage across render passes.
+- Run `ctest --test-dir build --output-on-failure`, native `--verify-retained` at
+  both `--msaa 2` and `--msaa 4`, and `tools/compare_retained.py` after renderer
+  edits. Use `tools/compare_storage.py` against the saved original renderer when
+  changing the visibility representation. Preserve object identities and depth.

@@ -2,6 +2,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 namespace stillwater {
@@ -12,6 +13,35 @@ struct Verification {
     std::filesystem::path directory;
     unsigned int failures{};
     unsigned int comparisons{};
+    bool save_probes(const char* name) {
+        const RenderStatistics& statistics = renderer.statistics();
+        const std::filesystem::path path = directory / (std::string(name) + "-probes.json");
+        std::ofstream output(path);
+        output << std::setprecision(9) << "[\n";
+        for (unsigned int row = 0; row < 8; ++row) {
+            for (unsigned int column = 0; column < 12; ++column) {
+                const unsigned int x = (2 * column + 1) * statistics.render_width / 24;
+                const unsigned int y = (2 * row + 1) * statistics.render_height / 16;
+                VisibilityProbe probe{};
+                if (!renderer.query_fixed_visibility(x, y, probe))
+                    return false;
+                if (row != 0 || column != 0)
+                    output << ",\n";
+                output << "{\"pixel\":[" << x << ',' << y << "],\"samples\":[";
+                for (std::size_t sample = 0; sample < probe.samples.size(); ++sample) {
+                    const Float4& value = probe.samples[sample];
+                    if (sample != 0)
+                        output << ',';
+                    output << '[' << value.x << ',' << value.y << ',' << value.z << ',' << value.w
+                           << ']';
+                }
+                output << "],\"depths\":[" << probe.depths.x << ',' << probe.depths.y << ','
+                       << probe.depths.z << ',' << probe.depths.w << "]}";
+            }
+        }
+        output << "\n]\n";
+        return output.good();
+    }
     void check(bool condition, const char* message) {
         if (!condition) {
             ++failures;
@@ -26,6 +56,7 @@ struct Verification {
             return false;
         }
         check(renderer.statistics().visibility_builds == builds, "unexpected visibility rebuild");
+        check(save_probes(name), "cannot save visibility probes");
         renderer.set_retained(false);
         const std::string full = (directory / (std::string(name) + "-full.png")).string();
         if (!renderer.draw(scene, time, full.c_str())) {
@@ -45,10 +76,11 @@ bool verify_retained_renderer(Renderer& renderer, Scene& scene, const std::strin
     Verification test{renderer, scene, directory};
     // The host has not entered its animation loop: all times and changes are explicit.
     renderer.resize(960, 600);
+    VisibilityProbe probe{};
+    test.check(!renderer.query_fixed_visibility(480, 590, probe), "unprepared query accepted");
     std::uint64_t builds = renderer.statistics().visibility_builds + 1;
     if (!test.compare("initial", 0, builds))
         return false;
-    VisibilityProbe probe{};
     test.check(renderer.query_fixed_visibility(480, 590, probe), "cached visibility query failed");
     bool identified = false;
     for (const Float4& sample : probe.samples) {
@@ -108,6 +140,7 @@ bool verify_retained_renderer(Renderer& renderer, Scene& scene, const std::strin
     Matrix view = view_matrix();
     view.values[12] -= 0.8F;
     renderer.set_camera(view, {0.8F, 4.65F, 20.5F, 0});
+    test.check(!renderer.query_fixed_visibility(480, 590, probe), "camera edit exposed stale query");
     if (!test.compare("camera-shift", 3, ++builds))
         return false;
     renderer.set_camera(view, {0.8F, 4.65F, 20.5F, 0});
@@ -122,6 +155,7 @@ bool verify_retained_renderer(Renderer& renderer, Scene& scene, const std::strin
     if (!test.compare("light-unchanged", 3.15, builds))
         return false;
     renderer.resize(813, 517);
+    test.check(!renderer.query_fixed_visibility(400, 500, probe), "resize exposed stale query");
     if (!test.compare("resized", 3.2, ++builds))
         return false;
     // Exercise shadows advancing through the full path while the retained path is off.
@@ -134,6 +168,16 @@ bool verify_retained_renderer(Renderer& renderer, Scene& scene, const std::strin
         return false;
     test.check(renderer.statistics().dynamic_shadow_frames == shadows_before_rewind + 1,
                "time rewind reused future shadows");
+    // Exercise the inverse camera with rotation, not only a translated default view.
+    const float cosine = std::cos(0.08F), sine = std::sin(0.08F);
+    const Matrix rotation{{cosine, 0, -sine, 0, 0, 1, 0, 0, sine, 0, cosine, 0, 0, 0, 0, 1}};
+    renderer.set_camera(multiply(view_matrix(), rotation),
+                        {-20.5F * sine, 4.65F, 20.5F * cosine, 0});
+    if (!test.compare("camera-rotated", 0.4, ++builds))
+        return false;
+    renderer.set_camera(view_matrix(), {0, 4.65F, 20.5F, 0});
+    if (!test.compare("camera-restored", 0.5, ++builds))
+        return false;
     const Scene replacement{};
     test.check(!renderer.draw(replacement, 0), "different scene silently reused resident geometry");
     std::ofstream receipt(std::filesystem::path(directory) / "native-verification.json");

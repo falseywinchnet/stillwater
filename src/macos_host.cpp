@@ -169,6 +169,8 @@ void print_metrics() {
            << ",\n  \"light_visibility_builds\": " << render.light_visibility_builds
            << ",\n  \"light_visibility_reuses\": " << render.light_visibility_reuses
            << ",\n  \"retained_bytes\": " << render.retained_bytes
+           << ",\n  \"transient_backing_bytes\": " << render.transient_backing_bytes
+           << ",\n  \"memoryless_targets\": " << (render.memoryless_targets ? "true" : "false")
            << ",\n  \"gpu_allocated_bytes\": " << state.renderer.allocated_gpu_bytes()
            << ",\n  \"render_width\": " << render.render_width
            << ",\n  \"render_height\": " << render.render_height

@@ -15,6 +15,8 @@ struct RenderStatistics {
     double gpu_shadow_frame_seconds{}, gpu_reuse_frame_seconds{};
     std::uint64_t gpu_shadow_frames{}, gpu_reuse_frames{};
     std::uint64_t visibility_builds{}, visibility_reuses{}, retained_bytes{};
+    std::uint64_t transient_backing_bytes{};
+    bool memoryless_targets{};
     std::uint64_t light_visibility_builds{}, light_visibility_reuses{};
     std::uint64_t fixed_camera_draws{}, moving_camera_draws{};
     unsigned int render_width{}, render_height{};
@@ -53,7 +55,8 @@ class Renderer final {
     void upload_actors(const Scene& scene);
     bool upload_edits(id command, const Scene& scene);
     id make_texture(unsigned long format, unsigned int width, unsigned int height,
-                    unsigned long usage, unsigned long samples = 1);
+                    unsigned long usage, unsigned long samples = 1, bool transient = false);
+    void update_reconstruction();
     enum class DrawSet { all, fixed, moving, retained_surface, uncached_surface };
     void encode_geometry(id encoder, const Scene& scene, id pipeline, const void* uniforms,
                          unsigned long uniform_size, DrawSet draw_set = DrawSet::all);
@@ -62,7 +65,7 @@ class Renderer final {
     id vertices_{nil}, indices_{nil}, instances_{nil}, actors_{nil}, depth_{nil}, shadow_{nil},
         color_{nil};
     std::array<id, 6> materials_{};
-    std::array<id, 3> visibility_{};
+    std::array<id, 4> visibility_{};
     id visibility_depth_{nil}, visibility_pipeline_{nil}, restore_pipeline_{nil},
         restore_depth_state_{nil};
     id light_visibility_{nil}, light_visibility_pipeline_{nil}, query_pipeline_{nil};
@@ -70,6 +73,8 @@ class Renderer final {
     float light_intensity_{1};
     bool retained_{true}, visibility_ready_{};
     Matrix view_{view_matrix()};
+    Matrix reconstruction_{};
+    bool memoryless_supported_{};
     Float4 eye_{0, 4.65F, 20.5F, 0};
     id fixed_shadow_{nil};
     bool fixed_shadow_ready_{};
