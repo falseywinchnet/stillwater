@@ -84,3 +84,9 @@ not establish an aesthetic improvement. The trial changed normal relief, pigment
 and fine-detail filtering together, so the cause of the regression is not isolated.
 Any future leaf trial should compare one change at a time against this accepted
 baseline rather than reintroducing the combined treatment.
+
+The rollback audit also found that the trial's preview captures had mismatched
+heights (1180×642 before, 1180×639 after). Its side-by-side crops and whole-image
+difference are not controlled A/B evidence. The restored 1180×639 capture matches
+the accepted wood/rock baseline at the same dimensions pixel for pixel. Future
+visual comparisons must assert matching capture dimensions before rendering them.
