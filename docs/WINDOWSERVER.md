@@ -1,18 +1,75 @@
 # WindowServer cost investigation
 
-The 2026-09-23 investigation concerns macOS compositor overhead, using Stillwater
-as a workload that exposes it. It confirms substantial GPU work attributed to
-WindowServer, but does not establish which OS mechanism causes it. The
-last stopped control remained expensive after all aquarium processes exited.
-This makes the initial stopped/animated difference insufficient for causal
-attribution. Other applications and user activity were left running.
+The strongest observation is a visibility-dependent compositor workload with
+Stillwater stopped. Minimizing all windows reduced WindowServer CPU to 13.6%
+and the whole-device GPU counter to 0%; restoring windows raised them to 44.8%
+and 21.5%. A subsequently saved WindowServer CPU sample catches Core Animation
+layer preparation, Metal command submission and backdrop blur preparation.
+These observations narrow the mechanism but do not establish an OS bug or
+attribute GPU time to a particular effect or application.
 
 The device is an A18 Pro MacBook Neo, macOS 26.6.1 (25G76), internal 2408×1506
 panel. The accepted two-view build was used. Stillwater was stopped at the start
 and left stopped at the end. Tests were muted. Production code and system
 preferences were not changed.
 
-## Observations
+## Visibility control and stack sample
+
+The user minimized all windows, then restored them at approximately 18:46 local
+time. Stillwater was stopped throughout this follow-up. The stable comparison
+excludes the restoration transition and later computer-use interactions.
+
+| State | Local interval (end exclusive) | Samples | WindowServer CPU | Whole-device GPU |
+|---|---|---:|---:|---:|
+| All windows minimized | 18:45:20–18:45:55 | 34 | 13.6% | 0.0% |
+| Windows restored | 18:46:10–18:46:35 | 24 | 44.8% | 21.5% |
+
+CPU is on a one-core percentage scale. GPU is a whole-device integer counter;
+zero means below its reported resolution, not zero energy use. This is one
+visibility transition, not a repeated randomized test. It does not separate
+application rendering from compositor GPU work. It substantially weakens the
+prior interpretation that the GPU remained permanently busy after Stillwater
+exited. Activity Monitor alone was also reported by the user to raise load;
+that individual-window observation was not independently quantified.
+
+Activity Monitor successfully sampled WindowServer at 18:49:46.905. The saved
+CPU call graph contains 129 observations of the main thread, of which 99 are
+in its service-message wait and 25 under the display-update callback. Within
+that update path are layer-tree traversal, visible-region calculations,
+`CompositorMetal::CompositeLayersToDestination`, and Metal command submission.
+One sampled stack passes through `capture_backdrop`, `prepare_blur_mipmap`,
+`MetalContext::create_variable_blur_mip_surface`, and a compute encoder.
+
+This directly observes backdrop blur preparation even though Reduce Transparency
+was enabled when preferences were inspected. It does not identify the surface,
+prove blur dominates, or supply GPU timings. The `CA::OGL` namespace in some
+symbols is not evidence of an OpenGL fallback: the same stacks explicitly use
+Metal. Deep recursive layer-preparation stacks must not be mistaken for many
+independent samples. External-display-named threads were waiting throughout the
+sample; their names do not establish an active phantom display.
+
+The display-mode query reports 1408×881 logical points, 2816×1762 backing pixels
+at 60 Hz, versus the 2408×1506 physical panel: 36.8% more backing pixels. This
+is a possible cost multiplier, not a measurement of each compositor pass or
+proof of the CPU cause. A window inventory found 107 records, 27 onscreen,
+with five owned by WindowServer (three onscreen). The inspected GPU recovery
+counter was zero. Neither check establishes a leaked-window or GPU-reset cause.
+Recent logs include cursor-surface errors, invalid-window constraints and a few
+render-fence timeouts; concurrent display transitions and screen capture prevent
+attributing those errors as the cause of sustained load.
+
+A relevant historical precedent is Electron's
+[macOS 26 window-mask/shadow fix](https://github.com/electron/electron/pull/48376):
+removing a private corner-mask override fixed excessive WindowServer GPU use.
+That establishes that window configuration can trigger disproportionate
+compositor work. It does not establish that this machine has that already-fixed
+bug; the fix author's cache-identity explanation is a hypothesis.
+
+Sanitized counters, sample fingerprint and interpretation are in
+[evidence/windowserver-visibility-2026-09-23.json](evidence/windowserver-visibility-2026-09-23.json).
+The full OS sample stays in local artifacts, outside the public repository.
+
+## Earlier exploratory observations
 
 Each row is a sequential 12–15 second exploratory observation. WindowServer CPU
 is cumulative process CPU time divided by elapsed wall time, on a one-core
@@ -80,19 +137,19 @@ An animated desktop can therefore create dependencies in translucent foreground
 surfaces, even when those applications do little CPU work themselves. This is a
 plausible mechanism here, not a measured attribution to a particular application.
 
-## Next discriminating tests
+## Remaining attribution limits
 
-1. Establish a repeatable quiet baseline, then repeat stopped / paused / animated /
-   stopped with the same foreground windows and no changing external content.
-   Persistence after exit must reproduce before calling this an OS regression.
-2. Compare the existing compute presentation with a single fullscreen render-pass
-   average and framebufferOnly=true, preserving both views, resolution and colors.
-3. In a separately authorized display-preference experiment, compare transparency
-   enabled/disabled and a native display scaling configuration. Restore settings.
-4. Use a privileged per-process GPU trace or Instruments to attribute compositor
-   passes. Noninteractive powermetrics access was unavailable in this session;
-   no credentials were requested or settings changed.
+The immediate discriminating tests concern the desktop: repeat individual-window
+visibility controls with stationary input and fixed content; then compare native
+and scaled display modes with the user's agreement. These separate the cost of
+window composition from the scaling multiplier. A GPU timeline is still needed
+to rank backdrop, shadow, blend and presentation passes by execution time.
 
-Raw sample series and Activity Monitor observations are in
+Command-line sampling lacked privilege, but Activity Monitor's helper supplied
+the CPU sample above. Noninteractive powermetrics access was unavailable and
+Instruments/xctrace was not installed. No credentials were requested. The CPU
+sample does not replace a per-process GPU trace. Production rendering and
+system preferences were not changed by this investigation.
+
+Earlier exploratory data remains in
 [evidence/windowserver-2026-09-23.json](evidence/windowserver-2026-09-23.json).
-The local artifact directory contains the diagnostic source, logs and sampler.

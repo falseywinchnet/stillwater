@@ -1,0 +1,1428 @@
+{
+  "date": "2026-09-23",
+  "timezone": "America/Chicago",
+  "stillwater_running": false,
+  "method": "User minimized all windows and scheduled restoration at 18:46. CPU from cumulative WindowServer CPU-time deltas; GPU from integer IOAccelerator whole-device utilization counters. Single transition, not repeated randomized trials; individual applications not isolated.",
+  "windows": [
+    {
+      "state": "all windows minimized",
+      "start_local": "18:45:20",
+      "end_local_exclusive": "18:45:55",
+      "samples": 34,
+      "windowserver_cpu_percent_one_core": 13.644350126658232,
+      "whole_device_gpu_percent": 0
+    },
+    {
+      "state": "windows restored",
+      "start_local": "18:46:10",
+      "end_local_exclusive": "18:46:35",
+      "samples": 24,
+      "windowserver_cpu_percent_one_core": 44.82994857504359,
+      "whole_device_gpu_percent": 21.458333333333332
+    }
+  ],
+  "display_mode": {
+    "Width": 1408,
+    "Height": 881,
+    "PixelWidth": 2816,
+    "PixelHeight": 1762,
+    "RefreshRate": 60.0
+  },
+  "panel_pixels": [
+    2408,
+    1506
+  ],
+  "window_counts": {
+    "all_window_records": 107,
+    "onscreen_records": 27,
+    "windowserver_owned": 5,
+    "windowserver_onscreen": 3,
+    "windowserver_large": 1
+  },
+  "sample": {
+    "time_local": "2026-09-23T18:49:46.905-05:00",
+    "sha256": "cacfe0d40c5a808df4cc3df48955ab5c16bf66ea1aa27f719b170a73ed92de1a",
+    "main_thread_observations": 129,
+    "main_thread_service_message_wait_observations": 99,
+    "main_thread_display_update_observations": 25,
+    "backdrop_blur_stack_observations": 1,
+    "interpretation": "CPU stack sample observes layer preparation, Metal composition/submission, and backdrop blur preparation. Does not measure GPU pass durations or identify the originating app. Recursive stack totals are not CPU-time shares."
+  },
+  "series": [
+    {
+      "local_time": "2026-09-23T18:45:16.905728",
+      "utc_epoch": 1790207116.905746,
+      "elapsed_seconds": 1.0365951670100912,
+      "windowserver_cpu": 15.435148175057511,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:17.954503",
+      "utc_epoch": 1790207117.954548,
+      "elapsed_seconds": 1.0486273750429973,
+      "windowserver_cpu": 15.25804149418967,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:18.990887",
+      "utc_epoch": 1790207118.9909,
+      "elapsed_seconds": 1.0363039579242468,
+      "windowserver_cpu": 14.474517717237566,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:20.035402",
+      "utc_epoch": 1790207120.035421,
+      "elapsed_seconds": 1.0444084170740098,
+      "windowserver_cpu": 16.277157214901973,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:21.054410",
+      "utc_epoch": 1790207121.05442,
+      "elapsed_seconds": 1.018915499909781,
+      "windowserver_cpu": 12.75866350214197,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:22.075098",
+      "utc_epoch": 1790207122.07511,
+      "elapsed_seconds": 1.0205967921065167,
+      "windowserver_cpu": 7.838550993490185,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:23.096512",
+      "utc_epoch": 1790207123.096523,
+      "elapsed_seconds": 1.021329499897547,
+      "windowserver_cpu": 7.832927570898459,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:24.143651",
+      "utc_epoch": 1790207124.143677,
+      "elapsed_seconds": 1.0470532909967005,
+      "windowserver_cpu": 8.59555103827996,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:25.188133",
+      "utc_epoch": 1790207125.1881542,
+      "elapsed_seconds": 1.0444068750366569,
+      "windowserver_cpu": 13.40473749561944,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:26.230464",
+      "utc_epoch": 1790207126.230484,
+      "elapsed_seconds": 1.0422571250237525,
+      "windowserver_cpu": 14.391842127321588,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:27.276906",
+      "utc_epoch": 1790207127.276928,
+      "elapsed_seconds": 1.0463731249328703,
+      "windowserver_cpu": 14.335230564422826,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:28.320732",
+      "utc_epoch": 1790207128.3207512,
+      "elapsed_seconds": 1.0437618340365589,
+      "windowserver_cpu": 14.37109454501527,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:29.364466",
+      "utc_epoch": 1790207129.3644822,
+      "elapsed_seconds": 1.0436724580358714,
+      "windowserver_cpu": 14.372325228977507,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:30.409060",
+      "utc_epoch": 1790207130.40908,
+      "elapsed_seconds": 1.0445375830167904,
+      "windowserver_cpu": 14.360421533225775,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:31.453581",
+      "utc_epoch": 1790207131.453603,
+      "elapsed_seconds": 1.0444637920008972,
+      "windowserver_cpu": 13.4040070212266,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:32.497231",
+      "utc_epoch": 1790207132.497248,
+      "elapsed_seconds": 1.0436004169750959,
+      "windowserver_cpu": 14.373317368821901,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:33.542816",
+      "utc_epoch": 1790207133.5428338,
+      "elapsed_seconds": 1.0455363750224933,
+      "windowserver_cpu": 14.346703144685156,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:34.588322",
+      "utc_epoch": 1790207134.588341,
+      "elapsed_seconds": 1.0454588750144467,
+      "windowserver_cpu": 12.434731112963215,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:35.636221",
+      "utc_epoch": 1790207135.636246,
+      "elapsed_seconds": 1.0478539579780772,
+      "windowserver_cpu": 14.31497193402952,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:36.680511",
+      "utc_epoch": 1790207136.680532,
+      "elapsed_seconds": 1.044248832971789,
+      "windowserver_cpu": 15.322018560284564,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:37.727571",
+      "utc_epoch": 1790207137.727594,
+      "elapsed_seconds": 1.0470204589655623,
+      "windowserver_cpu": 14.3263676186783,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:38.773698",
+      "utc_epoch": 1790207138.773715,
+      "elapsed_seconds": 1.046090791001916,
+      "windowserver_cpu": 14.33909955851093,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:39.811446",
+      "utc_epoch": 1790207139.8114629,
+      "elapsed_seconds": 1.0377137090545148,
+      "windowserver_cpu": 13.491196925742372,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:40.857561",
+      "utc_epoch": 1790207140.8575842,
+      "elapsed_seconds": 1.046080083004199,
+      "windowserver_cpu": 14.33924633794764,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:41.900803",
+      "utc_epoch": 1790207141.900827,
+      "elapsed_seconds": 1.0432103750063106,
+      "windowserver_cpu": 14.378691353915249,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:42.944900",
+      "utc_epoch": 1790207142.9449222,
+      "elapsed_seconds": 1.0440563330193982,
+      "windowserver_cpu": 15.324843587775998,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:43.989954",
+      "utc_epoch": 1790207143.990012,
+      "elapsed_seconds": 1.0450317919021472,
+      "windowserver_cpu": 14.353630306418912,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:45.034521",
+      "utc_epoch": 1790207145.034539,
+      "elapsed_seconds": 1.044541250099428,
+      "windowserver_cpu": 14.360371120719726,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:46.079868",
+      "utc_epoch": 1790207146.0798862,
+      "elapsed_seconds": 1.045321207959205,
+      "windowserver_cpu": 14.349656244612726,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:47.125493",
+      "utc_epoch": 1790207147.125511,
+      "elapsed_seconds": 1.0455995840020478,
+      "windowserver_cpu": 14.345835852387395,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:48.169686",
+      "utc_epoch": 1790207148.1697001,
+      "elapsed_seconds": 1.0441687499405816,
+      "windowserver_cpu": 14.365494083472138,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:49.217187",
+      "utc_epoch": 1790207149.217203,
+      "elapsed_seconds": 1.047478000051342,
+      "windowserver_cpu": 14.320109824438033,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:50.262473",
+      "utc_epoch": 1790207150.2624938,
+      "elapsed_seconds": 1.045262833009474,
+      "windowserver_cpu": 14.350457634795047,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:51.306013",
+      "utc_epoch": 1790207151.306031,
+      "elapsed_seconds": 1.0435189580311999,
+      "windowserver_cpu": 14.37443937551295,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:52.352170",
+      "utc_epoch": 1790207152.352191,
+      "elapsed_seconds": 1.0461354169528931,
+      "windowserver_cpu": 13.38258868939241,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:53.398270",
+      "utc_epoch": 1790207153.398295,
+      "elapsed_seconds": 1.0460784169845283,
+      "windowserver_cpu": 12.42736661935922,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:54.444004",
+      "utc_epoch": 1790207154.444046,
+      "elapsed_seconds": 1.0457145830150694,
+      "windowserver_cpu": 14.344258216394946,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:55.488664",
+      "utc_epoch": 1790207155.488679,
+      "elapsed_seconds": 1.0446438329527155,
+      "windowserver_cpu": 14.35896094837451,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:56.538453",
+      "utc_epoch": 1790207156.538476,
+      "elapsed_seconds": 1.0497707920148969,
+      "windowserver_cpu": 14.288833442038712,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:57.574656",
+      "utc_epoch": 1790207157.57467,
+      "elapsed_seconds": 1.0361882500583306,
+      "windowserver_cpu": 13.511058437208193,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:58.617170",
+      "utc_epoch": 1790207158.617188,
+      "elapsed_seconds": 1.0424957500072196,
+      "windowserver_cpu": 14.388547866323718,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:45:59.661461",
+      "utc_epoch": 1790207159.661477,
+      "elapsed_seconds": 1.0442757919663563,
+      "windowserver_cpu": 14.364021571431357,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:00.706770",
+      "utc_epoch": 1790207160.706787,
+      "elapsed_seconds": 1.0452915830537677,
+      "windowserver_cpu": 16.263404655670836,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:01.752538",
+      "utc_epoch": 1790207161.7525601,
+      "elapsed_seconds": 1.0457536249887198,
+      "windowserver_cpu": 14.34372269049483,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:02.797220",
+      "utc_epoch": 1790207162.79724,
+      "elapsed_seconds": 1.044664999935776,
+      "windowserver_cpu": 17.2304040082883,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:03.843651",
+      "utc_epoch": 1790207163.843668,
+      "elapsed_seconds": 1.046419542049989,
+      "windowserver_cpu": 18.15715326092904,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:04.887932",
+      "utc_epoch": 1790207164.887954,
+      "elapsed_seconds": 1.0442663750145584,
+      "windowserver_cpu": 17.23698132006842,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:05.931522",
+      "utc_epoch": 1790207165.9315379,
+      "elapsed_seconds": 1.0435753329657018,
+      "windowserver_cpu": 17.248395425510786,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:06.978325",
+      "utc_epoch": 1790207166.978348,
+      "elapsed_seconds": 1.046787332976237,
+      "windowserver_cpu": 29.61442025824638,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:08.024387",
+      "utc_epoch": 1790207168.024408,
+      "elapsed_seconds": 1.0460510000120848,
+      "windowserver_cpu": 37.28307702105005,
+      "gpu": {
+        "Tiler Utilization %": 3,
+        "Renderer Utilization %": 8,
+        "Device Utilization %": 8
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:09.068102",
+      "utc_epoch": 1790207169.0681212,
+      "elapsed_seconds": 1.0437037920346484,
+      "windowserver_cpu": 17.246272492898974,
+      "gpu": {
+        "Tiler Utilization %": 0,
+        "Renderer Utilization %": 0,
+        "Device Utilization %": 0
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:10.108703",
+      "utc_epoch": 1790207170.1087291,
+      "elapsed_seconds": 1.0405853749252856,
+      "windowserver_cpu": 30.75192172770649,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 13,
+        "Device Utilization %": 13
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:11.176505",
+      "utc_epoch": 1790207171.1765199,
+      "elapsed_seconds": 1.0677919581066817,
+      "windowserver_cpu": 44.01606478049604,
+      "gpu": {
+        "Tiler Utilization %": 11,
+        "Renderer Utilization %": 34,
+        "Device Utilization %": 34
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:12.214167",
+      "utc_epoch": 1790207172.21418,
+      "elapsed_seconds": 1.037650958984159,
+      "windowserver_cpu": 41.439753538509436,
+      "gpu": {
+        "Tiler Utilization %": 11,
+        "Renderer Utilization %": 21,
+        "Device Utilization %": 21
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:13.260847",
+      "utc_epoch": 1790207173.2608662,
+      "elapsed_seconds": 1.0466664159903303,
+      "windowserver_cpu": 44.90446935344358,
+      "gpu": {
+        "Tiler Utilization %": 4,
+        "Renderer Utilization %": 14,
+        "Device Utilization %": 14
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:14.309444",
+      "utc_epoch": 1790207174.309479,
+      "elapsed_seconds": 1.048578624962829,
+      "windowserver_cpu": 43.868908734255136,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 16,
+        "Device Utilization %": 16
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:15.354615",
+      "utc_epoch": 1790207175.354641,
+      "elapsed_seconds": 1.0451622089603916,
+      "windowserver_cpu": 45.92588556066591,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 15,
+        "Device Utilization %": 15
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:16.395441",
+      "utc_epoch": 1790207176.395458,
+      "elapsed_seconds": 1.0408193750772625,
+      "windowserver_cpu": 45.15673048133591,
+      "gpu": {
+        "Tiler Utilization %": 4,
+        "Renderer Utilization %": 15,
+        "Device Utilization %": 15
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:17.432131",
+      "utc_epoch": 1790207177.4321501,
+      "elapsed_seconds": 1.0366790000116453,
+      "windowserver_cpu": 45.33708119831544,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 16,
+        "Device Utilization %": 16
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:18.473089",
+      "utc_epoch": 1790207178.473106,
+      "elapsed_seconds": 1.0409462499665096,
+      "windowserver_cpu": 48.99388416996724,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 15,
+        "Device Utilization %": 15
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:19.510140",
+      "utc_epoch": 1790207179.51016,
+      "elapsed_seconds": 1.0370410829782486,
+      "windowserver_cpu": 49.17837956280949,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 15,
+        "Device Utilization %": 15
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:20.562598",
+      "utc_epoch": 1790207180.562625,
+      "elapsed_seconds": 1.0524459580192342,
+      "windowserver_cpu": 47.508377621690876,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 15,
+        "Device Utilization %": 15
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:21.612163",
+      "utc_epoch": 1790207181.6121888,
+      "elapsed_seconds": 1.0495520839467645,
+      "windowserver_cpu": 47.6393699414884,
+      "gpu": {
+        "Tiler Utilization %": 4,
+        "Renderer Utilization %": 14,
+        "Device Utilization %": 15
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:22.652048",
+      "utc_epoch": 1790207182.6520588,
+      "elapsed_seconds": 1.0398788750171661,
+      "windowserver_cpu": 48.08252307190548,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 16,
+        "Device Utilization %": 16
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:23.705853",
+      "utc_epoch": 1790207183.705886,
+      "elapsed_seconds": 1.0537886660313234,
+      "windowserver_cpu": 44.600973150644386,
+      "gpu": {
+        "Tiler Utilization %": 10,
+        "Renderer Utilization %": 25,
+        "Device Utilization %": 25
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:24.754099",
+      "utc_epoch": 1790207184.75413,
+      "elapsed_seconds": 1.0482312500244007,
+      "windowserver_cpu": 46.74541042153443,
+      "gpu": {
+        "Tiler Utilization %": 24,
+        "Renderer Utilization %": 36,
+        "Device Utilization %": 36
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:25.794670",
+      "utc_epoch": 1790207185.7946932,
+      "elapsed_seconds": 1.0405659589450806,
+      "windowserver_cpu": 39.401634896758296,
+      "gpu": {
+        "Tiler Utilization %": 21,
+        "Renderer Utilization %": 32,
+        "Device Utilization %": 33
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:26.824642",
+      "utc_epoch": 1790207186.824661,
+      "elapsed_seconds": 1.029967166017741,
+      "windowserver_cpu": 44.661617881509,
+      "gpu": {
+        "Tiler Utilization %": 10,
+        "Renderer Utilization %": 44,
+        "Device Utilization %": 44
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:27.846726",
+      "utc_epoch": 1790207187.846737,
+      "elapsed_seconds": 1.0220744169782847,
+      "windowserver_cpu": 40.11449589117379,
+      "gpu": {
+        "Tiler Utilization %": 4,
+        "Renderer Utilization %": 13,
+        "Device Utilization %": 13
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:28.867898",
+      "utc_epoch": 1790207188.8679109,
+      "elapsed_seconds": 1.021163042052649,
+      "windowserver_cpu": 46.02595086641727,
+      "gpu": {
+        "Tiler Utilization %": 4,
+        "Renderer Utilization %": 13,
+        "Device Utilization %": 14
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:29.887857",
+      "utc_epoch": 1790207189.887868,
+      "elapsed_seconds": 1.0199494579574093,
+      "windowserver_cpu": 46.080714719178786,
+      "gpu": {
+        "Tiler Utilization %": 4,
+        "Renderer Utilization %": 14,
+        "Device Utilization %": 15
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:30.935739",
+      "utc_epoch": 1790207190.935758,
+      "elapsed_seconds": 1.0478698330698535,
+      "windowserver_cpu": 45.80721620778632,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 16,
+        "Device Utilization %": 16
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:31.961614",
+      "utc_epoch": 1790207191.9616451,
+      "elapsed_seconds": 1.0258653339697048,
+      "windowserver_cpu": 46.789767049936444,
+      "gpu": {
+        "Tiler Utilization %": 6,
+        "Renderer Utilization %": 22,
+        "Device Utilization %": 22
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:32.992853",
+      "utc_epoch": 1790207192.992873,
+      "elapsed_seconds": 1.0312299160286784,
+      "windowserver_cpu": 47.516076907243246,
+      "gpu": {
+        "Tiler Utilization %": 6,
+        "Renderer Utilization %": 28,
+        "Device Utilization %": 28
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:34.028764",
+      "utc_epoch": 1790207194.028806,
+      "elapsed_seconds": 1.0358912500087172,
+      "windowserver_cpu": 45.37155806627472,
+      "gpu": {
+        "Tiler Utilization %": 9,
+        "Renderer Utilization %": 49,
+        "Device Utilization %": 49
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:35.074885",
+      "utc_epoch": 1790207195.074912,
+      "elapsed_seconds": 1.0461203339509666,
+      "windowserver_cpu": 45.8838227690804,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 29,
+        "Device Utilization %": 29
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:36.121618",
+      "utc_epoch": 1790207196.121641,
+      "elapsed_seconds": 1.0467241660226136,
+      "windowserver_cpu": 45.85735340709687,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 17,
+        "Device Utilization %": 18
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:37.169099",
+      "utc_epoch": 1790207197.16918,
+      "elapsed_seconds": 1.0474506249884143,
+      "windowserver_cpu": 46.78024799461135,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 15,
+        "Device Utilization %": 15
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:38.212763",
+      "utc_epoch": 1790207198.212786,
+      "elapsed_seconds": 1.0436751670204103,
+      "windowserver_cpu": 45.033168830007504,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 14,
+        "Device Utilization %": 14
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:39.235393",
+      "utc_epoch": 1790207199.235407,
+      "elapsed_seconds": 1.0226232080021873,
+      "windowserver_cpu": 46.93810938910851,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 14,
+        "Device Utilization %": 14
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:40.285337",
+      "utc_epoch": 1790207200.2853582,
+      "elapsed_seconds": 1.0499324169941247,
+      "windowserver_cpu": 46.66967054827385,
+      "gpu": {
+        "Tiler Utilization %": 5,
+        "Renderer Utilization %": 16,
+        "Device Utilization %": 16
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:41.337261",
+      "utc_epoch": 1790207201.33728,
+      "elapsed_seconds": 1.0519164999714121,
+      "windowserver_cpu": 49.433581470844736,
+      "gpu": {
+        "Tiler Utilization %": 6,
+        "Renderer Utilization %": 19,
+        "Device Utilization %": 19
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:42.363118",
+      "utc_epoch": 1790207202.363132,
+      "elapsed_seconds": 1.0258482079952955,
+      "windowserver_cpu": 49.71495743769416,
+      "gpu": {
+        "Tiler Utilization %": 6,
+        "Renderer Utilization %": 18,
+        "Device Utilization %": 18
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:43.401803",
+      "utc_epoch": 1790207203.40182,
+      "elapsed_seconds": 1.0386743339477107,
+      "windowserver_cpu": 48.13828393156109,
+      "gpu": {
+        "Tiler Utilization %": 6,
+        "Renderer Utilization %": 18,
+        "Device Utilization %": 18
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:44.445402",
+      "utc_epoch": 1790207204.4454331,
+      "elapsed_seconds": 1.043590083019808,
+      "windowserver_cpu": 46.953301683539486,
+      "gpu": {
+        "Tiler Utilization %": 15,
+        "Renderer Utilization %": 30,
+        "Device Utilization %": 30
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:45.483219",
+      "utc_epoch": 1790207205.483239,
+      "elapsed_seconds": 1.0375082499813288,
+      "windowserver_cpu": 39.51775805261027,
+      "gpu": {
+        "Tiler Utilization %": 17,
+        "Renderer Utilization %": 42,
+        "Device Utilization %": 43
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:46.536040",
+      "utc_epoch": 1790207206.536073,
+      "elapsed_seconds": 1.0531090419972315,
+      "windowserver_cpu": 45.579325676574655,
+      "gpu": {
+        "Tiler Utilization %": 11,
+        "Renderer Utilization %": 54,
+        "Device Utilization %": 54
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:47.562409",
+      "utc_epoch": 1790207207.562428,
+      "elapsed_seconds": 1.026361416094005,
+      "windowserver_cpu": 44.81852033589299,
+      "gpu": {
+        "Tiler Utilization %": 24,
+        "Renderer Utilization %": 56,
+        "Device Utilization %": 56
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:48.608113",
+      "utc_epoch": 1790207208.608135,
+      "elapsed_seconds": 1.0456952919485047,
+      "windowserver_cpu": 50.683980707263196,
+      "gpu": {
+        "Tiler Utilization %": 12,
+        "Renderer Utilization %": 54,
+        "Device Utilization %": 54
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:49.641089",
+      "utc_epoch": 1790207209.641104,
+      "elapsed_seconds": 1.032968792016618,
+      "windowserver_cpu": 50.34033980584741,
+      "gpu": {
+        "Tiler Utilization %": 9,
+        "Renderer Utilization %": 42,
+        "Device Utilization %": 42
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:50.689361",
+      "utc_epoch": 1790207210.689406,
+      "elapsed_seconds": 1.0482542499667034,
+      "windowserver_cpu": 49.60628588017075,
+      "gpu": {
+        "Tiler Utilization %": 11,
+        "Renderer Utilization %": 50,
+        "Device Utilization %": 50
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:51.739836",
+      "utc_epoch": 1790207211.7398689,
+      "elapsed_seconds": 1.0504565830342472,
+      "windowserver_cpu": 48.55031690469078,
+      "gpu": {
+        "Tiler Utilization %": 11,
+        "Renderer Utilization %": 44,
+        "Device Utilization %": 44
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:52.768682",
+      "utc_epoch": 1790207212.768703,
+      "elapsed_seconds": 1.028852166957222,
+      "windowserver_cpu": 47.625889872967555,
+      "gpu": {
+        "Tiler Utilization %": 10,
+        "Renderer Utilization %": 48,
+        "Device Utilization %": 48
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:53.840697",
+      "utc_epoch": 1790207213.840713,
+      "elapsed_seconds": 1.072008416056633,
+      "windowserver_cpu": 52.23839585678099,
+      "gpu": {
+        "Tiler Utilization %": 11,
+        "Renderer Utilization %": 47,
+        "Device Utilization %": 47
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:54.888467",
+      "utc_epoch": 1790207214.888491,
+      "elapsed_seconds": 1.04775691695977,
+      "windowserver_cpu": 38.17679402050099,
+      "gpu": {
+        "Tiler Utilization %": 8,
+        "Renderer Utilization %": 54,
+        "Device Utilization %": 54
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:55.924908",
+      "utc_epoch": 1790207215.9251862,
+      "elapsed_seconds": 1.0364314999897033,
+      "windowserver_cpu": 45.34790769836016,
+      "gpu": {
+        "Tiler Utilization %": 6,
+        "Renderer Utilization %": 38,
+        "Device Utilization %": 39
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:56.971307",
+      "utc_epoch": 1790207216.9713368,
+      "elapsed_seconds": 1.0463903329800814,
+      "windowserver_cpu": 43.9606507746389,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 45,
+        "Device Utilization %": 45
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:58.019224",
+      "utc_epoch": 1790207218.0192618,
+      "elapsed_seconds": 1.0479039590572938,
+      "windowserver_cpu": 48.66858222761284,
+      "gpu": {
+        "Tiler Utilization %": 8,
+        "Renderer Utilization %": 50,
+        "Device Utilization %": 50
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:46:59.075043",
+      "utc_epoch": 1790207219.075062,
+      "elapsed_seconds": 1.0558160409564152,
+      "windowserver_cpu": 47.35673456401297,
+      "gpu": {
+        "Tiler Utilization %": 8,
+        "Renderer Utilization %": 51,
+        "Device Utilization %": 51
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:00.127591",
+      "utc_epoch": 1790207220.1276338,
+      "elapsed_seconds": 1.0525288750650361,
+      "windowserver_cpu": 47.50463496491769,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 49,
+        "Device Utilization %": 49
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:01.176060",
+      "utc_epoch": 1790207221.176086,
+      "elapsed_seconds": 1.0484709589509293,
+      "windowserver_cpu": 47.688493012747436,
+      "gpu": {
+        "Tiler Utilization %": 8,
+        "Renderer Utilization %": 47,
+        "Device Utilization %": 47
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:02.231427",
+      "utc_epoch": 1790207222.231466,
+      "elapsed_seconds": 1.0553564160363749,
+      "windowserver_cpu": 48.32490637852294,
+      "gpu": {
+        "Tiler Utilization %": 9,
+        "Renderer Utilization %": 50,
+        "Device Utilization %": 50
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:03.267742",
+      "utc_epoch": 1790207223.267759,
+      "elapsed_seconds": 1.0363104169955477,
+      "windowserver_cpu": 47.283129837803415,
+      "gpu": {
+        "Tiler Utilization %": 9,
+        "Renderer Utilization %": 55,
+        "Device Utilization %": 55
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:04.312411",
+      "utc_epoch": 1790207224.3124459,
+      "elapsed_seconds": 1.0446551670320332,
+      "windowserver_cpu": 46.90543018247143,
+      "gpu": {
+        "Tiler Utilization %": 10,
+        "Renderer Utilization %": 52,
+        "Device Utilization %": 52
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:05.359504",
+      "utc_epoch": 1790207225.359534,
+      "elapsed_seconds": 1.0470859999768436,
+      "windowserver_cpu": 47.75156959514859,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 49,
+        "Device Utilization %": 49
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:06.407562",
+      "utc_epoch": 1790207226.407593,
+      "elapsed_seconds": 1.0480497910175472,
+      "windowserver_cpu": 46.753503906999285,
+      "gpu": {
+        "Tiler Utilization %": 8,
+        "Renderer Utilization %": 48,
+        "Device Utilization %": 48
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:07.444573",
+      "utc_epoch": 1790207227.4446049,
+      "elapsed_seconds": 1.0370000419206917,
+      "windowserver_cpu": 47.251685649224044,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 48,
+        "Device Utilization %": 48
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:08.492298",
+      "utc_epoch": 1790207228.492373,
+      "elapsed_seconds": 1.0477151250233874,
+      "windowserver_cpu": 47.72289604856462,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 48,
+        "Device Utilization %": 48
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:09.538783",
+      "utc_epoch": 1790207229.538812,
+      "elapsed_seconds": 1.0464744999771938,
+      "windowserver_cpu": 46.82388343246485,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 48,
+        "Device Utilization %": 48
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:10.583584",
+      "utc_epoch": 1790207230.583612,
+      "elapsed_seconds": 1.0447953330585733,
+      "windowserver_cpu": 48.813388023778415,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 48,
+        "Device Utilization %": 48
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:11.630115",
+      "utc_epoch": 1790207231.6301382,
+      "elapsed_seconds": 1.0465235420269892,
+      "windowserver_cpu": 48.73277853085895,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 45,
+        "Device Utilization %": 45
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:12.694339",
+      "utc_epoch": 1790207232.694381,
+      "elapsed_seconds": 1.064210082986392,
+      "windowserver_cpu": 48.862532718191865,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 46,
+        "Device Utilization %": 46
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:13.742471",
+      "utc_epoch": 1790207233.742495,
+      "elapsed_seconds": 1.0481290419120342,
+      "windowserver_cpu": 47.704049788362155,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 49,
+        "Device Utilization %": 49
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:14.791594",
+      "utc_epoch": 1790207234.791662,
+      "elapsed_seconds": 1.0491070420248434,
+      "windowserver_cpu": 46.70638746967701,
+      "gpu": {
+        "Tiler Utilization %": 8,
+        "Renderer Utilization %": 47,
+        "Device Utilization %": 47
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:15.846589",
+      "utc_epoch": 1790207235.846616,
+      "elapsed_seconds": 1.054991582990624,
+      "windowserver_cpu": 49.289492766895755,
+      "gpu": {
+        "Tiler Utilization %": 8,
+        "Renderer Utilization %": 47,
+        "Device Utilization %": 48
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:16.893842",
+      "utc_epoch": 1790207236.893877,
+      "elapsed_seconds": 1.047241042018868,
+      "windowserver_cpu": 46.78961006398931,
+      "gpu": {
+        "Tiler Utilization %": 8,
+        "Renderer Utilization %": 51,
+        "Device Utilization %": 51
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:17.937390",
+      "utc_epoch": 1790207237.937415,
+      "elapsed_seconds": 1.0435423330636695,
+      "windowserver_cpu": 48.871999137019834,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 47,
+        "Device Utilization %": 47
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:18.983281",
+      "utc_epoch": 1790207238.983308,
+      "elapsed_seconds": 1.0458837499609217,
+      "windowserver_cpu": 46.85033112035588,
+      "gpu": {
+        "Tiler Utilization %": 6,
+        "Renderer Utilization %": 54,
+        "Device Utilization %": 54
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:20.007469",
+      "utc_epoch": 1790207240.0074828,
+      "elapsed_seconds": 1.024179833009839,
+      "windowserver_cpu": 45.89037831568482,
+      "gpu": {
+        "Tiler Utilization %": 9,
+        "Renderer Utilization %": 51,
+        "Device Utilization %": 52
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:21.029939",
+      "utc_epoch": 1790207241.029956,
+      "elapsed_seconds": 1.022460666950792,
+      "windowserver_cpu": 46.945571162355364,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 55,
+        "Device Utilization %": 55
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:22.078994",
+      "utc_epoch": 1790207242.079021,
+      "elapsed_seconds": 1.048776249983348,
+      "windowserver_cpu": 48.62810346986889,
+      "gpu": {
+        "Tiler Utilization %": 9,
+        "Renderer Utilization %": 49,
+        "Device Utilization %": 49
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:23.124210",
+      "utc_epoch": 1790207243.124245,
+      "elapsed_seconds": 1.0454733330989257,
+      "windowserver_cpu": 47.82522749938841,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 49,
+        "Device Utilization %": 49
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:24.168885",
+      "utc_epoch": 1790207244.168912,
+      "elapsed_seconds": 1.044671459007077,
+      "windowserver_cpu": 46.90469867497044,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 45,
+        "Device Utilization %": 45
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:25.222570",
+      "utc_epoch": 1790207245.2226062,
+      "elapsed_seconds": 1.0536701249657199,
+      "windowserver_cpu": 46.50411816569521,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 45,
+        "Device Utilization %": 45
+      }
+    },
+    {
+      "local_time": "2026-09-23T18:47:26.273701",
+      "utc_epoch": 1790207246.2737322,
+      "elapsed_seconds": 1.0511266250396147,
+      "windowserver_cpu": 47.568008276943424,
+      "gpu": {
+        "Tiler Utilization %": 7,
+        "Renderer Utilization %": 50,
+        "Device Utilization %": 51
+      }
+    }
+  ]
+}
