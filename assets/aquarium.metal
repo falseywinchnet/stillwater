@@ -24,9 +24,10 @@ struct Out {
     uint identity [[flat]];
 };
 float3 water_color(float2 uv) {
-    // Broad overhead illumination, with a darker blue-green lower water column.
+    // Dim far water catches a broad overhead glow and falls into darkness below.
+    // This is an artistic depth cue, not solved volumetric light transport.
     float height=smoothstep(0.0f,1.0f,uv.y);
-    return mix(float3(0.0025f,0.009f,0.010f),float3(0.008f,0.029f,0.023f),height);
+    return mix(float3(0.00035f,0.0012f,0.0011f),float3(0.0018f,0.0055f,0.0042f),height*height);
 }
 float3 prototype_water_color(float2 uv) {
     float light=exp(-pow((uv.x-0.29f)*2.2f,2.0f)-pow((uv.y-0.93f)*2.4f,2.0f));
@@ -76,11 +77,11 @@ float2 strand_motion(float3 root, float3 direction, float distance, float compli
 Instance pearl_transform(Instance bubble,Vertex leaf,Instance parent,float time) {
     float age=fmod(time+bubble.behavior.y,bubble.anatomy.w);
     float hold=bubble.anatomy.w-6, released=max(0.0f,age-hold);
-    float radius=bubble.anatomy.z*(0.35f+0.65f*smoothstep(0.0f,hold,age));
+    float radius=bubble.anatomy.z*(0.70f+0.30f*smoothstep(0.0f,hold,age));
     float2 motion=strand_motion(leaf.anchor.xyz,leaf.bend.xyz,leaf.along.w,leaf.bend.w,time-released);
     float3 normal=normalize(leaf.normal.xyz-leaf.along.xyz*(motion.y*dot(leaf.bend.xyz,leaf.normal.xyz)));
     if(normal.y>0) normal=-normal;
-    float3 local=leaf.position.xyz+leaf.bend.xyz*motion.x+normal*radius*0.85f;
+    float3 local=leaf.position.xyz+leaf.bend.xyz*motion.x+(normal*0.60f+bubble.color.xyz*0.80f)*radius;
     float3 world=(parent.transform*float4(local,1)).xyz;
     world.y+=released*bubble.behavior.z;
     world.x+=0.07f*released*sin(released*2+bubble.behavior.y);
@@ -339,7 +340,8 @@ LightingTerms fixed_lighting(Out in,Surface surface,constant Uniforms& u) {
     int material=int(in.behavior.x+0.5f);
     float caustic=material>=7 && material<=9 ? max(n.y,0.0f) : 0.0f;
     float depth=max(0.0f,length(u.eye.xyz-in.world)-16);
-    float fog=1-exp(-depth*depth*0.00070f);
+    float rear=max(0.0f,depth-4.0f);
+    float fog=1-exp(-depth*depth*0.00070f-rear*rear*0.006f);
     float3 transmission=exp(-float3(0.030f,0.006f,0.016f)*depth)*(1-fog);
     return {base*transmission+water_color(float2(0.5f,clamp(in.world.y/10,0.0f,1.0f)))*fog,albedo*transmission,direct,caustic};
 }
@@ -536,7 +538,8 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
     // Water absorption is shallow in the foreground; there is no rear-wall geometry.
     float range=length(u.eye.xyz-in.world),depth=max(0.0f,range-16);
     color*=exp(-float3(0.030f,0.006f,0.016f)*depth);
-    float fog=1-exp(-depth*depth*0.00070f);
+    float rear=max(0.0f,depth-4.0f);
+    float fog=1-exp(-depth*depth*0.00070f-rear*rear*0.006f);
     color=mix(color,water_color(float2(0.5f,clamp(in.world.y/10,0.0f,1.0f))),fog);
     return float4(pow(aces(color),float3(1.0f/2.2f)),alpha);
 }
@@ -587,7 +590,14 @@ float4 shade_tank(Out in,constant Uniforms& u,depth2d<float> shadow,
         // Air-water Fresnel rim and a small overhead reflection. Alpha-to-coverage
         // leaves the center open; this is a thin-shell approximation, not refraction.
         float rim=pow(1-abs(dot(n,view)),2.5f);
-        float glint=pow(max(0.0f,dot(n,normalize(view+float3(-0.3f,1,0.5f)))),64.0f);
+        float glint=pow(max(0.0f,dot(n,normalize(view+float3(-0.3f,1,0.5f)))),material==15 ? 22.0f : 64.0f);
+        if(material==15) {
+            // Microscopic shells need a finite highlight footprint at desktop
+            // resolution; a needle specular lobe vanishes between MSAA samples.
+            float alpha=clamp(0.20f+rim*0.55f+glint*0.75f,0.0f,0.98f);
+            float3 pearl=float3(0.10f,0.15f,0.12f)+float3(0.26f,0.35f,0.28f)*rim+glint*1.5f;
+            return float4(pearl,alpha);
+        }
         float alpha=clamp(rim*0.80f+glint*0.95f,0.0f,0.95f);
         if(alpha<0.12f) discard_fragment();
         return float4(float3(0.40f,0.57f,0.53f)+glint*0.4f,alpha);

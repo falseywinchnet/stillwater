@@ -1,5 +1,6 @@
 #include "stillwater/scene.hpp"
 #include "stillwater/sound.hpp"
+#include "stillwater/timing.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -166,7 +167,7 @@ void habitat_contract() {
         require(std::abs(just_before.values[13] - just_after.values[13]) < 0.0001F,
                 "leaf attachment joins a rising bubble continuously");
     }
-    require(pearls >= 60 && pearls <= 144, "leaf pearling has a bounded shared-mesh budget");
+    require(pearls >= 288 && pearls <= 576, "leaf pearling has a bounded shared-mesh budget");
     const std::vector<stillwater::Instance> before = scene.instances();
     const stillwater::Vertex* vertices = scene.vertices().data();
     const stillwater::Vec3 destination{1, 2, 3};
@@ -202,6 +203,22 @@ void habitat_contract() {
     std::filesystem::remove(corrupt_path);
     require(scene.load_habitat(path, error), "repeated loading replaces a scene safely");
     require(scene.objects().size() == before.size(), "reload does not accumulate native extras");
+}
+void shadow_cadence_contract() {
+    for (const int fps : {24, 30, 60}) {
+        double previous = 0;
+        unsigned int refreshes = 0;
+        for (int frame = 1; frame <= fps * 10; ++frame) {
+            const double time = static_cast<double>(frame) / fps;
+            if (stillwater::shadow_refresh_due(time, previous)) {
+                previous = time;
+                ++refreshes;
+            }
+        }
+        require(refreshes == 160, "shadow cadence averages 16 Hz without frame quantization loss");
+    }
+    require(stillwater::shadow_refresh_due(0, 4), "time rewind invalidates shadow schedule");
+    require(!stillwater::shadow_refresh_due(1, 1), "same-time redraw reuses shadows");
 }
 void sound_contract() {
     const stillwater::Sound ambience = stillwater::make_ambience();
@@ -251,6 +268,7 @@ int main() {
     scene_contract();
     pointer_contract();
     habitat_contract();
+    shadow_cadence_contract();
     sound_contract();
     std::cout << "Retained scene, local interaction, geometry bounds and audio contracts passed.\n";
 }

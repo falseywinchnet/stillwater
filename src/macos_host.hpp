@@ -6,6 +6,7 @@ struct Options {
     bool muted{};
     bool paused{};
     bool smoke_tap{};
+    bool trace_pointer{};
     bool retained{true};
     bool conv_fast{};
     bool compact_camera{true};

@@ -324,6 +324,30 @@ bool exposed_pointer(CGPoint point) {
         CGRect rectangle{};
         if (bounds != nullptr && CGRectMakeWithDictionaryRepresentation(bounds, &rectangle) &&
             CGRectContainsPoint(rectangle, quartz)) {
+            // Dock owns a full-display, layer-20 desktop helper even when only
+            // Finder is visible. It is not the actual (small) Dock panel.
+            // Keep blocking the Dock's active fullscreen UI and all ordinary apps.
+            if (layer == 20 && CGRectContainsRect(rectangle, primary)) {
+                int pid = 0;
+                CFNumberRef owner = static_cast<CFNumberRef>(CFDictionaryGetValue(entry, kCGWindowOwnerPID));
+                if (owner != nullptr) CFNumberGetValue(owner, kCFNumberIntType, &pid);
+                id application = send<id>(type("NSRunningApplication"), "runningApplicationWithProcessIdentifier:", pid);
+                id bundle = send<id>(application, "bundleIdentifier");
+                if (send<BOOL>(bundle, "isEqualToString:", string("com.apple.dock")) &&
+                    !send<BOOL>(application, "isActive")) {
+                    if ((*host).options.trace_pointer)
+                        std::cout << "pointer ignored Dock desktop helper" << std::endl;
+                    continue;
+                }
+            }
+            if ((*host).options.trace_pointer) {
+                int pid = 0;
+                CFNumberRef owner = static_cast<CFNumberRef>(CFDictionaryGetValue(entry, kCGWindowOwnerPID));
+                if (owner != nullptr) CFNumberGetValue(owner, kCFNumberIntType, &pid);
+                std::cout << "pointer blocked: layer=" << layer << " pid=" << pid
+                          << " bounds=" << rectangle.origin.x << ',' << rectangle.origin.y << ','
+                          << rectangle.size.width << ',' << rectangle.size.height << std::endl;
+            }
             exposed = false;
             break;
         }
@@ -349,7 +373,11 @@ void sample_pointer() {
     state.pointer_time = time;
     state.pointer_valid = point.x >= 0 && point.y >= 0 &&
                           point.x < state.width && point.y < state.height;
-    if (!state.pointer_valid || speed < 0.12 || elapsed > 0.5 || !exposed_pointer(screen))
+    const bool exposed = (speed >= 0.03 || state.options.trace_pointer) && exposed_pointer(screen);
+    if (state.options.trace_pointer)
+        std::cout << "pointer screen=" << screen.x << ',' << screen.y << " view=" << point.x << ',' << point.y
+                  << " speed=" << speed << " valid=" << state.pointer_valid << " exposed=" << exposed << std::endl;
+    if (!state.pointer_valid || speed < 0.03 || elapsed > 0.5 || !exposed)
         return;
     const TapResult result = state.scene.pointer_motion(point.x / state.width,
         point.y / state.height, state.width / state.height, time, speed);

@@ -61,11 +61,11 @@ The compiled app is a local development build, not a notarized distribution.
 
 ## What persists
 
-The scene retains about 7,700 objects, 16 fish, two crabs, a bubble emitter, geometry,
+The scene retains about 8,400 objects, 16 fish, two crabs, a bubble emitter, geometry,
 material textures, and per-object GPU records. Construction and upload happen once.
 Fish trajectories and plant bending are evaluated on the GPU from retained parameters.
 A glass tap changes only nearby creature records; moving a plant or rock changes one
-instance record. The static shadow map is cached. Moving shadows refresh at 8 Hz or
+instance record. The static shadow map is cached. Moving shadows refresh at 16 Hz or
 on an edit. Explicit pause stops the frame timer and ambient audio.
 
 The fixed camera view now retains depth, surface identity, world shading positions,

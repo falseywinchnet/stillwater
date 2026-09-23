@@ -1,0 +1,147 @@
+{
+  "description": "Darker rear water, clustered leaf-edge pearls, 16 Hz moving shadows, and Dock-helper pointer fix",
+  "date": "2026-09-23",
+  "host": "MacBook Neo, A18 Pro, 8 GiB",
+  "core_tests": "Release and ASan/UBSan passed",
+  "shadow_cadence_test": {
+    "simulated_seconds": 10,
+    "refreshes": 160,
+    "frame_rates": [
+      24,
+      30,
+      60
+    ]
+  },
+  "native": {
+    "2x": {
+      "failures": 0,
+      "comparisons": 17,
+      "visibility_builds": 7,
+      "camera_validated_samples": 7129926,
+      "light_visibility_builds": 15,
+      "queried_identity": 1,
+      "retained_full_images_passed": true,
+      "generic_specialized": {
+        "passed": true,
+        "images": 34,
+        "maximum_255": 1,
+        "exact_probes": true
+      }
+    },
+    "4x": {
+      "failures": 0,
+      "comparisons": 17,
+      "visibility_builds": 7,
+      "camera_validated_samples": 14259852,
+      "light_visibility_builds": 15,
+      "queried_identity": 1,
+      "retained_full_images_passed": true,
+      "generic_specialized": {
+        "passed": true,
+        "images": 34,
+        "maximum_255": 1,
+        "exact_probes": true
+      }
+    }
+  },
+  "desktop_smoke": {
+    "objects": 8402,
+    "actors": 18,
+    "frames": 594,
+    "wall_seconds": 25.2282,
+    "process_cpu_seconds_including_startup": 1.3408,
+    "peak_rss_bytes": 376078336,
+    "submit_wall_seconds": 5.55936,
+    "static_upload_bytes": 85086040,
+    "material_storage_bytes": 33914880,
+    "shadow_storage_bytes": 33816576,
+    "geometry_storage_bytes": 85087480,
+    "gpu_executed_seconds": 12.9128,
+    "gpu_timed_frames": 594,
+    "gpu_shadow_frame_seconds": 9.48226,
+    "gpu_shadow_frames": 401,
+    "gpu_reuse_frame_seconds": 3.43051,
+    "gpu_reuse_frames": 193,
+    "conv_storage_bytes": 0,
+    "conv_source_triangles": 0,
+    "conv_boundary_triangles": 0,
+    "conv_static_updates": 0,
+    "conv_moving_updates": 0,
+    "compact_camera": true,
+    "record_shading": false,
+    "specialize_foliage": true,
+    "camera_records": 1599413,
+    "camera_registration_builds": 1,
+    "camera_acquisition_command_gpu_seconds": 0.0470664,
+    "msaa_samples": 4,
+    "conv_fast": false,
+    "render_scale": 1,
+    "requested_fps": 24,
+    "actor_upload_bytes": 1440,
+    "geometry_builds": 1,
+    "instance_patch_bytes": 0,
+    "static_shadow_builds": 1,
+    "dynamic_shadow_frames": 401,
+    "visibility_builds": 1,
+    "visibility_reuses": 593,
+    "light_visibility_builds": 401,
+    "light_visibility_reuses": 193,
+    "retained_bytes": 84477900,
+    "transient_backing_bytes": 0,
+    "memoryless_targets": true,
+    "gpu_allocated_bytes": 250544128,
+    "render_width": 1408,
+    "render_height": 881,
+    "fixed_camera_draws": 21,
+    "moving_camera_draws": 2970,
+    "actor_edits": 0,
+    "taps": 0,
+    "pointer_reactions": 0,
+    "paused": false,
+    "desktop": true,
+    "menu_bar_visible": true,
+    "aquarium_accepts_keyboard": false,
+    "aquarium_is_key": false,
+    "window_level": -2147483622,
+    "ignores_mouse": true,
+    "raster_mode": "retained fixed visibility and lighting"
+  },
+  "metal_delta_bytes_from_previous_atmosphere": 49152,
+  "pointer": {
+    "preview_reactions": 1,
+    "preview_taps": 1,
+    "desktop_trace_exposed": true,
+    "desktop_drag": "Automation returned noWindowsAvailable; manual motion acceptance remains",
+    "fix": "Ignore inactive com.apple.dock full-display layer-20 helper; preserve actual panel and foreground-window blocking"
+  },
+  "leaf_pearls": {
+    "maximum": 576,
+    "maximum_cluster": 6,
+    "maximum_per_plant": 18,
+    "foreground_reservation": 288,
+    "radius_range": [
+      0.014,
+      0.026
+    ],
+    "main_draws": 1,
+    "mesh_vertices": 63,
+    "mesh_triangles": 96,
+    "placement": "Deterministic full-archive candidates with temporary 64x40 planting-depth guide for default view; not an exact visibility solution",
+    "inspection": "Native desktop capture and enlarged foreground crops show small glints along lower leaf margins"
+  },
+  "limitations": [
+    "Visual depth and bubble optics are artistic approximations.",
+    "Smoke ran on the working desktop; not an isolated GPU-utilization benchmark."
+  ],
+  "source_sha256": {
+    "src/habitat.cpp": "7224096e0fa369499e0923d4092f1e83a5647c188252b4e45c8ee47afce6c39e",
+    "src/scene.cpp": "460a129cfdd19a32a79b1988619cd2f4d80dff993242de846ea2c046bbd294dc",
+    "src/macos_host.cpp": "c54b3359eb9cd1b1af960a0ba1c1153a29d8015e840a699304a9c0d9f838b0ca",
+    "src/macos_host.hpp": "0c6f4d6499e9db404ce55df5cbbf3b72c417cb92f54219f56adb18c100eb2e65",
+    "src/metal_renderer.cpp": "d23f41f9c880f60f7fde167577c486337f29acbc10f0b0fbec8c8d2692f01684",
+    "src/main.cpp": "34a36b975d2c299322e04d6d5af4f48a498dd9284bdeda0160b89440def4e70e",
+    "include/stillwater/timing.hpp": "91b47a7a8e3325fcba0ef96c8144cb29ea508c687aea674aa6fe10115992f3d0",
+    "assets/aquarium.metal": "a20f61e870e6de2a325a5010a4531ef3ef5104d07b19118e30a8060c168944f2",
+    "tests/core_tests.cpp": "2c8e8853a0893ac7fff93d267769b73fb9dccc04b43d51735ba3b8ce688422ef"
+  }
+}

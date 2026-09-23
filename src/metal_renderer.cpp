@@ -1,4 +1,5 @@
 #include "metal_renderer.hpp"
+#include "stillwater/timing.hpp"
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
 #include <chrono>
@@ -1249,9 +1250,9 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         fixed_shadow_ready_ = true;
         ++statistics_.static_shadow_builds;
     }
-    // Direct-light visibility is retained. Moving casters refresh at 8 Hz or on edits;
+    // Direct-light visibility is retained. Moving casters refresh at 16 Hz or on edits;
     // their depth pass starts from the cached static occluders, never yesterday's fish.
-    if (rebuild_fixed || time < shadow_time_ || time - shadow_time_ >= 0.125 ||
+    if (rebuild_fixed || shadow_refresh_due(time, shadow_time_) ||
         shadow_revision_ != scene.statistics().revision) {
         id blit = send<id>(command, "blitCommandEncoder");
         send<void>(blit, "copyFromTexture:toTexture:", fixed_shadow_, shadow_);

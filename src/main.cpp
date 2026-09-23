@@ -29,6 +29,8 @@ int main(int argc, char** argv) {
             options.muted = true;
         else if (std::strcmp(argument, "--paused") == 0)
             options.paused = true;
+        else if (std::strcmp(argument, "--trace-pointer") == 0)
+            options.trace_pointer = true;
         else if (std::strcmp(argument, "--smoke-tap") == 0)
             options.smoke_tap = true;
         else if (std::strcmp(argument, "--full-redraw") == 0)

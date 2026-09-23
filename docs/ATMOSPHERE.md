@@ -14,7 +14,7 @@ mechanical noise. Bubble formation uses exponential waiting times, a distributio
 of radii, short damped resonances, and low-pass filtering. A very quiet continuous filtered
 noise bed supplies the return-water layer. The initial random splash envelopes
 (0.65 seconds mean spacing) were removed after the listener reported recurring
-mechanical clatter. That identifies a candidate cause, pending a listening check. There are no rising pitch
+mechanical clatter. The listener confirmed that removing this layer eliminated the clatter. There are no rising pitch
 sweeps or scheduled repeating phrases. Restarting sound applies a half-second fade.
 
 The approximate shallow-water bubble relation f ≈ 3.26 / radius-in-metres follows
@@ -42,20 +42,29 @@ and the shells grow slightly on ascent. A thin rim and overhead glint use the
 existing MSAA alpha-to-coverage path. They are geometry, not image sprites.
 This inexpensive shell appearance does not solve optical refraction.
 
-Leaf pearling adds at most 144 bubbles, selected beneath actual leaf vertices.
+Leaf pearling adds at most 576 tiny bubbles, clustered beneath actual leaf margins.
+Groups contain up to six pearls, with a cap of 18 per plant. Half the placement
+budget is reserved for foreground planting. A temporary 64×40 planting-depth guide
+at load time favors front leaves; it is a placement heuristic for the default
+view, not an exact visibility solution. Candidate ordering is deterministic and
+covers the full foliage archive. Radii are 0.014–0.026 world units, with 70–100%
+growth; a small offset around the margin keeps the underside sphere touching the
+edge while exposing its glint. Material 15 stores that local edge direction in
+its instance RGB field. Its broader specular footprint survives desktop sampling.
 Each instance references its source leaf and parent plant; the existing strand
 motion carries it until release. A staggered 24–43 second cycle grows a pearl,
 releases it for six seconds, and fades it before reattachment. This is an artistic
 cycle, not simulated gas production or adhesion. A shared 63-vertex, 96-triangle
-mesh supplies all pearls: at the cap, 13,824 triangles and one additional main
+mesh supplies all pearls: at the cap, 55,296 triangles and one additional main
 camera draw. The pearl batch is omitted from shadows. No framebuffer, texture,
 per-frame CPU particle update, or new per-pixel cache is added. Parent transforms
 remain live references, so moving a plant moves its attached pearls as well.
 
-Water has a vertical light gradient and reduced distance haze, making more of
-the existing rear planting visible. The hemispheric fill is cooler and the lower
-water darker. This changes lighting and separation of existing geometry rather
-than adding a background image.
+Far water is dark green with a broad, subdued overhead gradient. Distance haze
+now converges toward this darker water, increasingly dimming rear planting beyond
+the foreground. Fish, sand, and wood close to the camera keep their direct light.
+This is an artistic depth cue applied to existing geometry; it adds no texture,
+framebuffer, or volumetric transport pass.
 
 The upstream fish anatomy mesh was already present. This revision restores
 selected upstream features that the simplified port omitted: scale and lateral
@@ -74,14 +83,26 @@ The aquarium always sits below Finder icons and passes all desktop clicks and
 drags through. **Fish react to pointer** is enabled by default and independently
 switchable from the menu. The host samples `NSEvent.mouseLocation` at most about
 eight times a second while animating. It does not install an event tap, global
-input monitor, or keyboard handler. Fast motion near a fish causes a gentler
-local escape; a resting/slow pointer does nothing, and a 2.5-second per-fish
+input monitor, or keyboard handler. Motion above 0.03 screen-heights per second
+near a fish causes a gentler local escape; a resting/very slow pointer does nothing, and a 2.5-second per-fish
 cooldown prevents repeatedly restarting flight. Foreground window rectangles
 suppress reactions under other apps, the Dock, and menus. This conservative
 rectangle check also suppresses reactions through transparent parts of a window.
+The inactive Dock's full-display layer-20 helper is excluded: its invisible
+rectangle previously blocked the whole desktop. The actual Dock panel, active
+Dock UI, and foreground application windows still block reactions. Use
+`--trace-pointer` to log coordinates and window-blocking decisions locally.
 
 Desktop clicks continue to belong to Finder. Glass tapping is available in the
 preview. Controls stay in the menu-bar dropdown and preview context menu.
+
+## Shadow cadence
+
+Moving shadows refresh on 16 Hz phase boundaries, while rendering remains at
+24 fps. This alternates one- and two-frame gaps and averages 16 refreshes per
+second. A simple minimum 1/16-second delay would quantize down to 12 Hz at 24 fps.
+Geometry edits, light changes, and time rewinds retain their invalidation rules.
+The higher cadence adds shadow work but no shadow textures.
 
 ## Verification
 
@@ -95,10 +116,20 @@ preview. Controls stay in the menu-bar dropdown and preview context menu.
   The native run confirms mouse pass-through and refusal of keyboard focus.
   Computer-use automation could not execute a background drag; end-to-end desktop
   pointer movement remains a manual acceptance check, separate from the core tests.
-- A 25-second muted desktop smoke at 1408×881 submitted 601 frames, reused one
+- The original atmosphere revision's 25-second muted desktop smoke at 1408×881 submitted 601 frames, reused one
   fixed camera acquisition, and allocated 250,494,976 bytes of Metal resources
   (238.89 MiB). This is a smoke receipt, not an isolated performance comparison
   or a GPU-utilization measurement.
 
-See [the verification receipt](evidence/neo-atmosphere.json). Reproduce with
+The follow-up's core checks include 16 Hz scheduling at 24, 30, and 60 fps.
+The follow-up desktop smoke submitted 594 frames and 401 moving-shadow updates
+in 25.23 seconds, with one camera acquisition and 250,544,128 bytes (238.94 MiB)
+of Metal resources: 48 KiB above the earlier atmosphere revision. This includes
+startup and normal desktop activity, not an isolated GPU-utilization benchmark.
+Native preview input recorded one pointer reaction separately from its glass tap.
+A desktop trace confirms that the invisible Dock helper is ignored and exposed
+space is accepted; the automation backend still cannot drag the Finder desktop.
+
+See the [original receipt](evidence/neo-atmosphere.json) and
+[depth/pearling follow-up receipt](evidence/neo-depth-pearling.json). Reproduce with
 `ctest --test-dir build --output-on-failure` and `python3 tools/verify_native.py`.

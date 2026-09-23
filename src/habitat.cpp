@@ -194,31 +194,132 @@ bool Scene::load_habitat(const std::string& path, std::string& error) {
     pearls.mesh.index_count = static_cast<std::uint32_t>(indices.size()) - pearls.mesh.first_index;
     std::vector<unsigned int> per_plant(header.instances, 0);
     std::uint32_t seed = 81731U;
-    for (std::uint32_t index = 0; index < header.vertices && pearls.instance_count < 144; ++index) {
+    std::vector<std::uint32_t> pearl_candidates;
+    // A coarse, load-time planting depth guide biases pearls toward the front
+    // leaves instead of spending the batch behind overlapping foliage.
+    constexpr std::size_t pearl_columns = 64, pearl_rows = 40;
+    std::array<double, pearl_columns * pearl_rows> front_leaf;
+    front_leaf.fill(-1000);
+    for (std::uint32_t index = 0; index < header.vertices; ++index) {
         const Vertex& leaf = vertices[index];
         if (leaf.binding.y < 0.5F)
             continue;
         const std::size_t parent = static_cast<std::size_t>(leaf.binding.x);
-        if (instances[parent].behavior.x != 10 || per_plant[parent] >= 2 ||
-            leaf.uv.x < 0.30F || leaf.uv.x > 0.70F || leaf.uv.y < 0.30F || leaf.uv.y > 0.85F)
+        if (instances[parent].behavior.x != 10)
             continue;
         const Matrix& matrix = instances[parent].transform;
         const Vec3 point{
             matrix.values[0]*leaf.position.x + matrix.values[4]*leaf.position.y + matrix.values[8]*leaf.position.z + matrix.values[12],
             matrix.values[1]*leaf.position.x + matrix.values[5]*leaf.position.y + matrix.values[9]*leaf.position.z + matrix.values[13],
             matrix.values[2]*leaf.position.x + matrix.values[6]*leaf.position.y + matrix.values[10]*leaf.position.z + matrix.values[14]};
-        if (point.x < -7 || point.x > 7 || point.z < -7 || point.z > 3 || point.y < 0.6 || point.y > 7.4)
+        if (point.x < -9 || point.x > 9 || point.z < -5 || point.z > 6 || point.y < 0.3 || point.y > 7.4)
             continue;
+        const Vec3 screen = project(point, 1.6);
+        if (screen.x < 0 || screen.x >= 1 || screen.y < 0 || screen.y >= 1)
+            continue;
+        const std::size_t cell = static_cast<std::size_t>(screen.y * pearl_rows) * pearl_columns +
+                                 static_cast<std::size_t>(screen.x * pearl_columns);
+        front_leaf[cell] = std::max(front_leaf[cell], point.z);
+        if ((leaf.uv.x > 0.03F && leaf.uv.x < 0.97F) || leaf.uv.y < 0.05F || leaf.uv.y > 0.85F)
+            continue;
+        pearl_candidates.push_back(index);
+    }
+    // Shuffle all eligible leaves before taking the bounded batch. File order
+    // puts dense rear grasses first and otherwise hides almost every attachment.
+    for (std::size_t count = pearl_candidates.size(); count > 1; --count) {
         seed = seed * 1664525U + 1013904223U;
-        if (seed % 41U != 0)
-            continue;
+        std::swap(pearl_candidates[count - 1], pearl_candidates[seed % count]);
+    }
+    // Reserve half the clusters for near planting, which has far fewer mesh
+    // vertices than the grass beds. Each cluster stays on actual leaf vertices.
+    std::vector<std::uint32_t> attachments;
+    std::vector<bool> selected(header.vertices, false);
+    for (unsigned int pass = 0; pass < 2; ++pass) {
+        const std::size_t limit = pass == 0 ? 288 : 576;
+        for (const std::uint32_t seed_index : pearl_candidates) {
+            if (attachments.size() >= limit)
+                break;
+            const Vertex& seed_leaf = vertices[seed_index];
+            const std::size_t parent = static_cast<std::size_t>(seed_leaf.binding.x);
+            const Matrix& matrix = instances[parent].transform;
+            const Vec3 point{
+                matrix.values[0]*seed_leaf.position.x + matrix.values[4]*seed_leaf.position.y + matrix.values[8]*seed_leaf.position.z + matrix.values[12],
+                matrix.values[1]*seed_leaf.position.x + matrix.values[5]*seed_leaf.position.y + matrix.values[9]*seed_leaf.position.z + matrix.values[13],
+                matrix.values[2]*seed_leaf.position.x + matrix.values[6]*seed_leaf.position.y + matrix.values[10]*seed_leaf.position.z + matrix.values[14]};
+            if (selected[seed_index] || per_plant[parent] >= 18 ||
+                (pass == 0 && point.z < 0))
+                continue;
+            const Vec3 screen = project(point, 1.6);
+            const std::size_t cell = static_cast<std::size_t>(screen.y * pearl_rows) * pearl_columns +
+                                     static_cast<std::size_t>(screen.x * pearl_columns);
+            if (point.z < front_leaf[cell] - 0.75)
+                continue;
+            std::vector<std::uint32_t> cluster;
+            cluster.push_back(seed_index);
+            for (const std::uint32_t neighbor : pearl_candidates) {
+                if (cluster.size() >= 6 || attachments.size() + cluster.size() >= limit)
+                    break;
+                const Vertex& leaf = vertices[neighbor];
+                if (selected[neighbor] || leaf.binding.x != seed_leaf.binding.x)
+                    continue;
+                const float dx = leaf.position.x - seed_leaf.position.x;
+                const float dy = leaf.position.y - seed_leaf.position.y;
+                const float dz = leaf.position.z - seed_leaf.position.z;
+                if (dx*dx + dy*dy + dz*dz > 0.26F*0.26F)
+                    continue;
+                bool separated = true;
+                for (const std::uint32_t member : cluster) {
+                    const Vertex& other = vertices[member];
+                    const float x = leaf.position.x - other.position.x;
+                    const float y = leaf.position.y - other.position.y;
+                    const float z = leaf.position.z - other.position.z;
+                    if (x*x + y*y + z*z < 0.045F*0.045F)
+                        separated = false;
+                }
+                if (separated)
+                    cluster.push_back(neighbor);
+            }
+            for (const std::uint32_t member : cluster) {
+                if (per_plant[parent] >= 18)
+                    break;
+                selected[member] = true;
+                attachments.push_back(member);
+                ++per_plant[parent];
+            }
+        }
+    }
+    for (const std::uint32_t index : attachments) {
+        if (pearls.instance_count == 576)
+            break;
+        const Vertex& leaf = vertices[index];
+        const std::size_t parent = static_cast<std::size_t>(leaf.binding.x);
+        const Matrix& matrix = instances[parent].transform;
+        const Vec3 point{
+            matrix.values[0]*leaf.position.x + matrix.values[4]*leaf.position.y + matrix.values[8]*leaf.position.z + matrix.values[12],
+            matrix.values[1]*leaf.position.x + matrix.values[5]*leaf.position.y + matrix.values[9]*leaf.position.z + matrix.values[13],
+            matrix.values[2]*leaf.position.x + matrix.values[6]*leaf.position.y + matrix.values[10]*leaf.position.z + matrix.values[14]};
+        seed = seed * 1664525U + 1013904223U;
+        const float phase = static_cast<float>(seed & 65535U) / 65535.0F;
+        seed = seed * 1664525U + 1013904223U;
         const float random = static_cast<float>(seed & 65535U) / 65536;
-        const float radius = 0.022F + 0.026F * random;
+        const float radius = 0.014F + 0.012F * random;
         Instance pearl{};
         pearl.transform.values = {radius,0,0,0, 0,radius,0,0, 0,0,radius,0,
                                   static_cast<float>(point.x),static_cast<float>(point.y),static_cast<float>(point.z),1};
-        pearl.color = {0.5F,0.7F,0.65F,1};
-        pearl.behavior = {15, random * 37, 0.65F + random * 0.35F, -1};
+        // The small outward offset exposes a pearl around the margin while
+        // its sphere still touches the leaf's underside. Material 15 uses RGB
+        // for this local edge direction, not pigment.
+        const std::uint32_t inner_index = leaf.uv.x < 0.5F ? index + 1 : index - 1;
+        const Vertex& inner = vertices[inner_index < header.vertices ? inner_index : index];
+        const float edge_x = leaf.position.x - inner.position.x;
+        const float edge_y = leaf.position.y - inner.position.y;
+        const float edge_z = leaf.position.z - inner.position.z;
+        const float edge_length = std::sqrt(edge_x*edge_x + edge_y*edge_y + edge_z*edge_z);
+        if (inner.binding.x == leaf.binding.x && std::abs(inner.uv.y - leaf.uv.y) < 0.0001F && edge_length > 0.00001F)
+            pearl.color = {edge_x / edge_length, edge_y / edge_length, edge_z / edge_length, 1};
+        else
+            pearl.color = {0, 0, 0, 1};
+        pearl.behavior = {15, phase * (24 + random * 19), 0.65F + random * 0.35F, -1};
         // Leaf vertex and parent instance remain references, so plant edits and
         // the exact upstream strand deformation carry the attached pearl with them.
         pearl.anatomy = {static_cast<float>(index), static_cast<float>(parent), radius, 24 + random * 19};
@@ -227,7 +328,6 @@ bool Scene::load_habitat(const std::string& path, std::string& error) {
                            point, radius, -1});
         instances.push_back(pearl);
         ++pearls.instance_count;
-        ++per_plant[parent];
     }
     if (pearls.instance_count > 0)
         batches.push_back(pearls);

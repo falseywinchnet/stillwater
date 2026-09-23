@@ -126,7 +126,7 @@ Matrix leaf_bubble_transform(const Instance& bubble, const Vertex& leaf,
     const double age = std::fmod(time + bubble.behavior.y, bubble.anatomy.w);
     const double hold = bubble.anatomy.w - 6, released = std::max(0.0, age - hold);
     const double growth = std::clamp(age / hold, 0.0, 1.0);
-    double radius = bubble.anatomy.z * (0.35 + 0.65 * growth * growth * (3 - 2 * growth));
+    double radius = bubble.anatomy.z * (0.70 + 0.30 * growth * growth * (3 - 2 * growth));
     const double t = time - released, x = leaf.anchor.x, z = leaf.anchor.z;
     const double strength = 0.34 * std::sin(t * 0.031) + 0.15 * std::sin(t * 0.055 - x * 0.34 - z * 0.19) +
         0.03 * std::sin(t * 0.235 + x * 1.7 + z * 1.1) + 0.03 * std::sin(t * 0.155 + x * 0.6 - z * 2.3);
@@ -151,9 +151,9 @@ Matrix leaf_bubble_transform(const Instance& bubble, const Vertex& leaf,
                               leaf.normal.z - leaf.along.z * slope * bend_normal});
     if (normal.y > 0)
         normal = {-normal.x, -normal.y, -normal.z};
-    const Vec3 local{leaf.position.x + leaf.bend.x * motion + normal.x * radius * 0.85,
-                     leaf.position.y + leaf.bend.y * motion + normal.y * radius * 0.85,
-                     leaf.position.z + leaf.bend.z * motion + normal.z * radius * 0.85};
+    const Vec3 local{leaf.position.x + leaf.bend.x * motion + (normal.x * 0.60 + bubble.color.x * 0.80) * radius,
+                     leaf.position.y + leaf.bend.y * motion + (normal.y * 0.60 + bubble.color.y * 0.80) * radius,
+                     leaf.position.z + leaf.bend.z * motion + (normal.z * 0.60 + bubble.color.z * 0.80) * radius};
     const Matrix& m = parent.transform;
     Vec3 world{m.values[0]*local.x + m.values[4]*local.y + m.values[8]*local.z + m.values[12],
                m.values[1]*local.x + m.values[5]*local.y + m.values[9]*local.z + m.values[13],
@@ -431,7 +431,7 @@ TapResult Scene::tap(double x, double y, double aspect, double time) {
     return disturb(x, y, aspect, time, 0.20, 1.0, false);
 }
 TapResult Scene::pointer_motion(double x, double y, double aspect, double time, double speed) {
-    if (!std::isfinite(speed) || speed < 0.12)
+    if (!std::isfinite(speed) || speed < 0.03)
         return {};
     return disturb(x, y, aspect, time, 0.105, std::clamp(speed * 0.38, 0.12, 0.55), true);
 }
