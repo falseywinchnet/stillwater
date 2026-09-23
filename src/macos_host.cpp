@@ -24,7 +24,7 @@ struct Host {
     Renderer renderer{};
     Audio audio{};
     id app{nil}, window{nil}, view{nil}, layer{nil}, delegate{nil}, status{nil};
-    id pause_item{nil}, sound_item{nil}, desktop_item{nil}, pointer_item{nil};
+    id pause_item{nil}, sound_item{nil}, desktop_item{nil}, pointer_item{nil}, grain_item{nil};
     dispatch_source_t frames{nullptr}, quit_timer{nullptr};
     Clock::time_point began{Clock::now()};
     double paused_time{}, pause_started{};
@@ -88,6 +88,7 @@ void update_menu() {
     send<void>(state.sound_item, "setState:", state.audio.enabled() ? 1L : 0L);
     send<void>(state.desktop_item, "setState:", state.options.desktop ? 1L : 0L);
     send<void>(state.pointer_item, "setState:", state.pointer_mode ? 1L : 0L);
+    send<void>(state.grain_item, "setState:", state.options.leaf_grain ? 1L : 0L);
 
 }
 void apply_placement() {
@@ -159,6 +160,7 @@ void print_metrics() {
            << ",\n  \"compact_camera\": " << (state.options.compact_camera ? "true" : "false")
            << ",\n  \"record_shading\": " << (state.options.record_shading ? "true" : "false")
            << ",\n  \"specialize_foliage\": " << (state.options.specialize_foliage ? "true" : "false")
+           << ",\n  \"leaf_grain\": " << (state.options.leaf_grain ? "true" : "false")
            << ",\n  \"camera_records\": " << render.camera_records
            << ",\n  \"camera_registration_builds\": " << render.camera_registration_builds
            << ",\n  \"camera_acquisition_command_gpu_seconds\": " << render.camera_acquisition_command_gpu_seconds
@@ -255,6 +257,14 @@ void toggle_desktop(id, SEL, id) {
 void toggle_pointer(id, SEL, id) {
     (*host).pointer_mode = !(*host).pointer_mode;
     (*host).pointer_valid = false;
+    update_menu();
+}
+void toggle_leaf_grain(id, SEL, id) {
+    Host& state = *host;
+    state.options.leaf_grain = !state.options.leaf_grain;
+    state.renderer.set_leaf_grain(state.options.leaf_grain);
+    if (state.paused)
+        state.renderer.draw(state.scene, state.scene_time());
     update_menu();
 }
 void show_preview(id, SEL, id) {
@@ -464,6 +474,7 @@ void install_menu(Host& state) {
     state.desktop_item = menu_item(menu, state.delegate, "On the desktop", "toggleDesktop:");
     menu_item(menu, state.delegate, "Open aquarium window", "showPreview:");
     state.pointer_item = menu_item(menu, state.delegate, "Fish react to pointer", "togglePointer:");
+    state.grain_item = menu_item(menu, state.delegate, "Leaf surface grain", "toggleLeafGrain:");
     state.pause_item = menu_item(menu, state.delegate, "Pause the aquarium", "togglePause:");
     state.sound_item =
         menu_item(menu, state.delegate, "Aquarium sound", "toggleSound:");
@@ -493,6 +504,7 @@ int run_macos(const Options& options) {
     method(delegate_class, "toggleSound:", &toggle_sound, "v@:@");
     method(delegate_class, "toggleDesktop:", &toggle_desktop, "v@:@");
     method(delegate_class, "togglePointer:", &toggle_pointer, "v@:@");
+    method(delegate_class, "toggleLeafGrain:", &toggle_leaf_grain, "v@:@");
     method(delegate_class, "showPreview:", &show_preview, "v@:@");
     method(delegate_class, "quit:", &quit_action, "v@:@");
     method(delegate_class, "windowDidResize:", &resized, "v@:@");
@@ -551,7 +563,8 @@ int run_macos(const Options& options) {
         .conv_fast = options.conv_fast,
         .compact_camera = options.compact_camera,
         .record_shading = options.record_shading,
-        .specialize_foliage = options.specialize_foliage};
+        .specialize_foliage = options.specialize_foliage,
+        .leaf_grain = options.leaf_grain};
     if (!state.renderer.initialize(state.layer, state.scene, shader_path, configuration)) {
         std::cerr << state.renderer.error() << '\n';
         host = nullptr;

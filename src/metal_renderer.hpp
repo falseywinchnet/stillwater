@@ -32,6 +32,7 @@ struct RendererConfiguration {
     bool compact_camera{true};
     bool record_shading{};
     bool specialize_foliage{true};
+    bool leaf_grain{true};
 };
 struct VisibilityProbe {
     std::array<Float4, 4> samples{};
@@ -52,6 +53,7 @@ class Renderer final {
     }
     void set_camera(const Matrix& view, Float4 eye);
     bool set_light_intensity(float intensity);
+    void set_leaf_grain(bool enabled) { leaf_grain_ = enabled; }
     bool query_fixed_visibility(unsigned int x, unsigned int y, VisibilityProbe& result);
     std::uint64_t allocated_gpu_bytes() const;
     bool finish_pending(bool wait);
@@ -68,6 +70,7 @@ class Renderer final {
 
   private:
     id load_material(const std::string& path, bool srgb, const std::string& occlusion_path);
+    id make_leaf_texture();
     void upload_actors(const Scene& scene);
     bool upload_edits(id command, const Scene& scene);
     id make_texture(unsigned long format, unsigned int width, unsigned int height,
@@ -80,7 +83,7 @@ class Renderer final {
         background_pipeline_{nil}, depth_state_{nil};
     id vertices_{nil}, indices_{nil}, instances_{nil}, actors_{nil}, depth_{nil}, shadow_{nil},
         color_{nil};
-    std::array<id, 6> materials_{};
+    std::array<id, 7> materials_{};
     std::array<id, 4> visibility_{};
     id visibility_depth_{nil}, visibility_pipeline_{nil}, restore_pipeline_{nil},
         restore_depth_state_{nil};
@@ -107,6 +110,7 @@ class Renderer final {
     bool compact_camera_{};
     bool record_shading_{};
     bool specialize_foliage_{};
+    bool leaf_grain_{true};
     id foliage_pipeline_{nil};
     id record_shade_pipeline_{nil}, record_color_{nil}, record_light_{nil};
     bool validate_camera_{};

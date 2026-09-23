@@ -50,6 +50,16 @@ def main():
                                   "full_sha256": hashlib.sha256(full.read_bytes()).hexdigest()}
     if len(report["pairs"]) != native["comparisons"] or not report["pairs"]:
         report["passed"] = False
+    if (args.directory / 'leaf-grain-restored-retained.png').exists():
+        original = Image.open(args.directory / 'initial-retained.png').convert('RGB')
+        disabled = Image.open(args.directory / 'leaf-grain-off-retained.png').convert('RGB')
+        restored = Image.open(args.directory / 'leaf-grain-restored-retained.png').convert('RGB')
+        if original.size != disabled.size or original.size != restored.size:
+            raise RuntimeError('Leaf toggle comparison dimensions changed')
+        changed = ImageChops.difference(original, disabled).getbbox() is not None
+        exact = ImageChops.difference(original, restored).getbbox() is None
+        report['leaf_toggle'] = {'changes_image': changed, 'restores_exact_image': exact}
+        report['passed'] = report['passed'] and changed and exact
     (args.directory / "image-comparison.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
     raise SystemExit(0 if report["passed"] else 1)

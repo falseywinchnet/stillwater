@@ -293,7 +293,7 @@ float3 fish_skin(Out in) {
 struct Surface { float3 normal; float3 albedo; float alpha; float ambient_access; };
 Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_normal,
  texture2d<float> rock,texture2d<float> rock_normal,texture2d<float> wood,
- texture2d<float> wood_normal,bool front) {
+ texture2d<float> wood_normal,texture2d<float> leaf_grain,float grain_amount,bool front) {
     constexpr sampler surface_sampler(coord::normalized,address::repeat,filter::linear,mip_filter::linear,max_anisotropy(8));
     int material=int(in.behavior.x+0.5f);
     float3 normal=normalize(front ? in.normal : -in.normal),albedo=in.color.rgb;
@@ -323,6 +323,14 @@ Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_no
         float veins=pow(0.5f+0.5f*cos((leaf.y-abs(leaf.x-0.5f)*0.32f)*155),22.0f);
         albedo*=(0.965f+0.035f*sin(leaf.y*64+sin(leaf.x*25)))*(1-0.09f*edge+0.12f*veins);
         albedo=mix(albedo,albedo*1.22f+float3(0.008f,0.012f,0),midrib*0.6f);
+        // Broad blades retain the accepted strength; other resolved leaves
+        // use half strength. A small patch of
+        // the high-resolution tile keeps grain visible at the current pixel budget.
+        float width_fade=1-smoothstep(0.035f,0.08f,fwidth(leaf.x));
+        float broad=1-smoothstep(0.5f,0.7f,in.surface.y);
+        float2 grain_offset=fract(float(in.identity)*float2(0.618033989f,0.414213562f));
+        float grain=leaf_grain.sample(surface_sampler,leaf*float2(0.08f,0.12f)+grain_offset).r;
+        albedo*=1+grain_amount*(0.5f+0.5f*broad)*width_fade*0.80f*(grain-128.0f/255.0f);
         if(!front) albedo*=float3(0.82f,0.76f,0.66f);
         if(in.surface.y>=0.7f) alpha=edge>0.45f ? 0.5f : 0.75f;
     }
@@ -374,8 +382,8 @@ struct CachedSurface {
 fragment CachedSurface retain_surface(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],
  texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
  texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
- texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
-    Surface surface=riverscape_surface(in,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
+ texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]],bool front [[front_facing]]) {
+    Surface surface=riverscape_surface(in,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,u.illumination.y,front);
     LightingTerms terms=fixed_lighting(in,surface,u);
     float4 clip=u.camera*float4(in.world,1);
     float2 center=in.position.xy/u.clock.yz*float2(2,-2)+float2(-1,1);
@@ -499,8 +507,8 @@ kernel void query_visibility(SW_TEXTURE<float> distance_identity [[texture(0)]],
 }
 float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
  texture2d<float> sand,texture2d<float> sand_normal,texture2d<float> rock,texture2d<float> rock_normal,
- texture2d<float> wood,texture2d<float> wood_normal,bool front) {
-    Surface surface=riverscape_surface(in,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
+ texture2d<float> wood,texture2d<float> wood_normal,texture2d<float> leaf_grain,bool front) {
+    Surface surface=riverscape_surface(in,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,u.illumination.y,front);
     float3 normal=surface.normal,albedo=surface.albedo;
     float alpha=surface.alpha;
     int material=int(in.behavior.x+0.5f);
@@ -558,8 +566,8 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
 float4 shade_tank(Out in,constant Uniforms& u,depth2d<float> shadow,
  texture2d<float> sand,texture2d<float> sand_normal,
  texture2d<float> rock,texture2d<float> rock_normal,
- texture2d<float> wood,texture2d<float> wood_normal,bool front) {
-    if(in.surface.z>0.5f) return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
+ texture2d<float> wood,texture2d<float> wood_normal,texture2d<float> leaf_grain,bool front) {
+    if(in.surface.z>0.5f) return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,front);
     float3 n=normalize(front ? in.normal : -in.normal);
     float3 light=normalize(float3(0,0.9138f,0.4061f));float3 view=normalize(u.eye.xyz-in.world);
     int material=int(in.behavior.x+0.5f);float3 albedo=in.color.rgb;
@@ -627,8 +635,8 @@ float4 shade_tank(Out in,constant Uniforms& u,depth2d<float> shadow,
 fragment float4 tank_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
  texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
  texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
- texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
-    return shade_tank(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
+ texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]],bool front [[front_facing]]) {
+    return shade_tank(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,front);
 }
 
 // The foliage batch has one known material. Expose that invariant to the shader
@@ -648,7 +656,7 @@ fragment float4 foliage_fragment(Out in [[stage_in]],constant Uniforms& u [[buff
  depth2d<float> shadow [[texture(0)]],texture2d<float> sand [[texture(1)]],
  texture2d<float> sand_normal [[texture(2)]],texture2d<float> rock [[texture(3)]],
  texture2d<float> rock_normal [[texture(4)]],texture2d<float> wood [[texture(5)]],
- texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
+ texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]],bool front [[front_facing]]) {
     in.behavior.x=10;
-    return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
+    return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,front);
 }

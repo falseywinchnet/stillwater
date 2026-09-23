@@ -36,7 +36,7 @@ open build/Stillwater.app --args --preview --muted
 ```
 
 Launch without `--preview` for desktop placement. Click **◉** in the macOS menu
-bar to open Stillwater's dropdown: pause/resume, sound, pointer reactions,
+bar to open Stillwater's dropdown: pause/resume, sound, leaf surface grain, pointer reactions,
 window/desktop placement, and quit. There is no floating control strip.
 The preview's right-click menu exposes the same actions.
 
@@ -47,6 +47,10 @@ The preview's right-click menu exposes the same actions.
 - **Fish react to pointer** toggles this behavior in either placement. A per-fish
   cooldown prevents repeated flight restarts, and foreground window bounds suppress
   reactions while working in another app. No global input monitor is installed.
+- **Leaf surface grain** toggles the shared 2K fine-noise material. Pause first
+  to compare the same frame. Broad foreground leaves receive the full treatment;
+  other resolved leaves receive half strength and very thin leaves fade to smooth.
+  `--no-leaf-grain` starts with the treatment off. See [materials](docs/MATERIALS.md).
 - The aquarium never becomes a keyboard target. There are no Escape,
   Space, letter-key, or Command-Q handlers, and no menu keyboard shortcuts.
 - Closing the preview returns it to the desktop.

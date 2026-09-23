@@ -12,6 +12,7 @@ struct Options {
     bool compact_camera{true};
     bool record_shading{};
     bool specialize_foliage{true};
+    bool leaf_grain{true};
     double capture_time{};
     std::string verify_retained{};
     unsigned int fps{24};

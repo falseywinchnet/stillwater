@@ -1,5 +1,6 @@
 #include "metal_renderer.hpp"
 #include "stillwater/timing.hpp"
+#include "stillwater/leaf_texture.hpp"
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
 #include <chrono>
@@ -240,6 +241,7 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     compact_camera_ = configuration.compact_camera;
     record_shading_ = configuration.record_shading && compact_camera_;
     specialize_foliage_ = configuration.specialize_foliage && !conv_fast_;
+    leaf_grain_ = configuration.leaf_grain;
     if (conv_fast_)
         samples_ = 1;
     source_vertices_ = scene.vertices().data();
@@ -612,6 +614,11 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
             return false;
         }
     }
+    materials_[6] = make_leaf_texture();
+    if (materials_[6] == nil) {
+        error_ = "Cannot allocate leaf grain texture";
+        return false;
+    }
     for (const id material : materials_)
         statistics_.material_storage_bytes += send<unsigned long>(material, "allocatedSize");
     statistics_.shadow_storage_bytes = send<unsigned long>(shadow_, "allocatedSize") +
@@ -625,6 +632,32 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         return false;
     }
     return true;
+}
+id Renderer::make_leaf_texture() {
+    const std::vector<std::uint8_t> pixels = make_leaf_grain();
+    id descriptor = send<id>(type("MTLTextureDescriptor"),
+        "texture2DDescriptorWithPixelFormat:width:height:mipmapped:", 10UL,
+        static_cast<unsigned long>(leaf_grain_size), static_cast<unsigned long>(leaf_grain_size),
+        static_cast<BOOL>(YES));
+    send<void>(descriptor, "setStorageMode:", 0UL);
+    send<void>(descriptor, "setUsage:", 1UL);
+    id texture = send<id>(device_, "newTextureWithDescriptor:", descriptor);
+    if (texture == nil)
+        return nil;
+    send<void>(texture, "replaceRegion:mipmapLevel:withBytes:bytesPerRow:",
+        Region{0, 0, 0, leaf_grain_size, leaf_grain_size, 1}, 0UL,
+        static_cast<const void*>(pixels.data()), static_cast<unsigned long>(leaf_grain_size));
+    id command = send<id>(queue_, "commandBuffer");
+    id blit = send<id>(command, "blitCommandEncoder");
+    send<void>(blit, "generateMipmapsForTexture:", texture);
+    send<void>(blit, "endEncoding");
+    send<void>(command, "commit");
+    send<void>(command, "waitUntilCompleted");
+    if (send<unsigned long>(command, "status") == 5UL) {
+        release(texture);
+        return nil;
+    }
+    return texture;
 }
 id Renderer::load_material(const std::string& path, bool srgb, const std::string& occlusion_path) {
     std::vector<unsigned char> pixels;
@@ -1255,7 +1288,7 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         reconstruction_,
         {static_cast<float>(time), static_cast<float>(width_), static_cast<float>(height_), 0},
         eye_,
-        {light_intensity_, 0, 0, 0}};
+        {light_intensity_, leaf_grain_ ? 1.0F : 0.0F, 0, 0}};
     id command = send<id>(queue_, "commandBuffer");
     if (!upload_edits(command, scene))
         return false;

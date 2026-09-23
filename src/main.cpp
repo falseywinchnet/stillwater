@@ -37,6 +37,8 @@ int main(int argc, char** argv) {
             options.retained = false;
         else if (std::strcmp(argument, "--generic-foliage") == 0)
             options.specialize_foliage = false;
+        else if (std::strcmp(argument, "--no-leaf-grain") == 0)
+            options.leaf_grain = false;
         else if (std::strcmp(argument, "--specialize-foliage") == 0)
             options.specialize_foliage = true;
         else if (std::strcmp(argument, "--record-shading") == 0)
@@ -96,7 +98,7 @@ int main(int argc, char** argv) {
             std::cout << "Stillwater [--desktop|--preview] [--muted] [--paused] [--fps 1..60]\n  "
                          "[--capture file.png] [--metrics file.json] [--quit-after seconds]\n  "
                          "[--msaa 2|4] [--aa msaa|point|conv-fast] [--render-scale 0.5..1]\n  "
-                         "[--record-shading] [--specialize-foliage|--generic-foliage] [--compact-camera|--dense-camera] [--full-redraw] [--verify-retained directory] [--capture-time seconds]\n  "
+                         "[--record-shading] [--specialize-foliage|--generic-foliage] [--no-leaf-grain] [--compact-camera|--dense-camera] [--full-redraw] [--verify-retained directory] [--capture-time seconds]\n  "
                          "[--export-tap file.wav] [--export-ambience file.wav]\n";
             return std::strcmp(argument, "--help") == 0 ? 0 : 2;
         }

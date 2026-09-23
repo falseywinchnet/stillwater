@@ -61,9 +61,8 @@ power improvement is claimed.
 
 ## Further material work
 
-The next high-value target is the procedural leaf surface: subtle relief aligned
-with veins, a restrained waxy response and coherent pigment variation. Those
-details must fade with screen footprint to avoid shimmer on thin moving leaves.
+The current leaf trial is fine surface grain on resolved broad foreground blades,
+described below. The combined relief and pigment treatment was rejected.
 For fish, preserve directional scale reflection and fin transparency at the small
 desktop footprint; sharper painted scale outlines alone would look artificial.
 
@@ -90,3 +89,53 @@ heights (1180×642 before, 1180×639 after). Its side-by-side crops and whole-im
 difference are not controlled A/B evidence. The restored 1180×639 capture matches
 the accepted wood/rock baseline at the same dimensions pixel for pixel. Future
 visual comparisons must assert matching capture dimensions before rendering them.
+
+## Leaf microtexture
+
+The owner identified fine surface noise as the next direction and asked to work
+on the large nearby leaves first. The initial whole-leaf 2K sampling trial was
+visually ineffective: most of its grain averaged away at the native pixel budget.
+The revised trial placed a visibly scaled grain patch on broad, resolved blades.
+The owner accepted that appearance. The same mapping now extends at half strength
+to other resolved leaves, keeping the accepted broadleaf treatment unchanged.
+It does not reintroduce the rejected normal relief, color shifts or vein filtering.
+
+`src/leaf_texture.cpp` builds a deterministic 2048×2048 scalar texture once during
+initialization. It mixes 35% independent fine noise, 40% periodic noise on a
+four-texel grid and 25% on a sixteen-texel grid. There are no coarse pigment bands,
+photographic inputs, external assets or imagegen content. Integer hashing and
+wrapped lattice coordinates make the source reproducible and tileable. Values
+center on byte 128. Core checks cover extent, determinism, mean, variance, boundary
+continuity statistics and suppression of large-scale blotches through averaging.
+
+The GPU stores R8Unorm with a complete mip chain, trilinear filtering and up to 8×
+anisotropy. The leaf UV extent uses 0.08×0.12 of the tile, offset by stable object
+identity. This samples microscopic variation at a scale that remains visible on
+the foreground blades rather than mapping the entire 2K tile onto a small leaf.
+
+The multiplier is `1 + 0.8 * (0.5 + 0.5 * broad) * width_fade * (grain - 128/255)`.
+`broad` fades from 1 to 0 as the existing tissue-thinness parameter goes from 0.5
+to 0.7; `width_fade` goes from 1 to 0 as the horizontal UV footprint goes from
+0.035 to 0.08 per pixel. This favors broad, resolved surfaces without inventing
+object identities or relying on a fixed camera-distance cutoff. It preserves hue,
+the existing color pattern, surface normals, silhouette, coverage and motion.
+Grain is stationary in leaf coordinates and has no time-dependent random input.
+
+The menu-bar checkbox **Leaf surface grain** allows direct comparison; it
+redraws immediately while paused, at the same scene time. `--no-leaf-grain` is
+available for reproducible captures. Turning it off bypasses the visible effect,
+but does not free the resident texture. Very thin or distant foliage whose width cannot resolve the grain still fades to
+the unchanged base material.
+
+The texture adds 5,783,552 measured GPU bytes (5.52 MiB). There is one additional
+filtered leaf texture sample and no new framebuffer, render pass or geometry.
+Generation adds temporary CPU storage/work at startup. The current render policy
+still uses 1408×881 pixels on this display: a 2K material texture is not a higher
+resolution scene render, and subpixel detail must still average away.
+
+The native suite now includes 19 retained/full pairs at both 2× and 4× MSAA,
+including disabling and restoring grain at one exact time without rebuilding
+the fixed camera cache. The image check requires a visible toggle difference and
+pixel-exact restoration. Generic/specialized foliage is also compared at both
+sample counts. Evidence and measurements are in `docs/evidence/neo-leaf-grain.json`.
+These checks establish rendering behavior, not aesthetic acceptance.

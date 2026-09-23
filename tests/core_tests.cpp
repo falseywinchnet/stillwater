@@ -1,6 +1,7 @@
 #include "stillwater/scene.hpp"
 #include "stillwater/sound.hpp"
 #include "stillwater/timing.hpp"
+#include "stillwater/leaf_texture.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -17,6 +18,41 @@ void require(bool condition, const char* message) {
         std::cerr << "FAIL: " << message << '\n';
         std::exit(1);
     }
+}
+void leaf_grain_contract() {
+    const std::vector<std::uint8_t> pixels = stillwater::make_leaf_grain();
+    const unsigned int size = stillwater::leaf_grain_size;
+    require(pixels.size() == static_cast<std::size_t>(size) * size, "2K scalar leaf grain extent");
+    require(pixels == stillwater::make_leaf_grain(), "leaf grain reproducible without frame state");
+    double mean = 0, energy = 0, coarse_energy = 0, seam = 0, interior = 0;
+    for (const std::uint8_t value : pixels) {
+        mean += value;
+        energy += (static_cast<double>(value) - 128) * (static_cast<double>(value) - 128);
+    }
+    mean /= static_cast<double>(pixels.size());
+    energy /= static_cast<double>(pixels.size());
+    require(std::abs(mean - 128) < 0.5, "leaf grain does not introduce a broad brightness shift");
+    require(energy > 100 && energy < 2000, "leaf grain has bounded fine variation");
+    for (unsigned int y = 0; y < size; y += 64) {
+        for (unsigned int x = 0; x < size; x += 64) {
+            double average = 0;
+            for (unsigned int j = 0; j < 64; ++j)
+                for (unsigned int i = 0; i < 64; ++i)
+                    average += pixels[(y + j) * size + x + i];
+            average = average / 4096 - 128;
+            coarse_energy += average * average;
+        }
+    }
+    coarse_energy /= static_cast<double>((size / 64) * (size / 64));
+    require(coarse_energy < energy * 0.0625, "unresolved grain averages away instead of becoming blotches");
+    for (unsigned int i = 0; i < size; ++i) {
+        seam += std::abs(int(pixels[i * size]) - int(pixels[i * size + size - 1]));
+        seam += std::abs(int(pixels[i]) - int(pixels[(size - 1) * size + i]));
+        interior += std::abs(int(pixels[i * size + 512]) - int(pixels[i * size + 511]));
+        interior += std::abs(int(pixels[512 * size + i]) - int(pixels[511 * size + i]));
+    }
+    require(seam > interior * 0.8 && seam < interior * 1.2,
+            "wrapped texture boundary has ordinary neighboring-pixel variation");
 }
 void scene_contract() {
     stillwater::Scene scene{};
@@ -284,6 +320,7 @@ int main() {
     static_assert(sizeof(stillwater::Vertex) == 128);
     static_assert(sizeof(stillwater::Instance) == 112);
     static_assert(sizeof(stillwater::Actor) == 80);
+    leaf_grain_contract();
     scene_contract();
     pointer_contract();
     habitat_contract();

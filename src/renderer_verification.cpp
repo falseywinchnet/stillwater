@@ -75,6 +75,7 @@ bool verify_retained_renderer(Renderer& renderer, Scene& scene, const std::strin
         return false;
     Verification test{renderer, scene, directory};
     renderer.set_camera_validation(true);
+    renderer.set_leaf_grain(true);
     // The host has not entered its animation loop: all times and changes are explicit.
     renderer.resize(960, 600);
     VisibilityProbe probe{};
@@ -96,6 +97,12 @@ bool verify_retained_renderer(Renderer& renderer, Scene& scene, const std::strin
     }
     test.check(identified, "floor probe should identify a retained surface");
     test.check(!renderer.query_fixed_visibility(960, 600, probe), "out-of-bounds query accepted");
+    renderer.set_leaf_grain(false);
+    if (!test.compare("leaf-grain-off", 0, builds))
+        return false;
+    renderer.set_leaf_grain(true);
+    if (!test.compare("leaf-grain-restored", 0, builds))
+        return false;
     if (!test.compare("moving", 1, builds))
         return false;
     const std::uint64_t lights = renderer.statistics().light_visibility_builds;
