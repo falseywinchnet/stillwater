@@ -130,9 +130,15 @@ Renderer::~Renderer() {
     release(visibility_depth_);
     release(camera_map_);
     release(camera_records_);
+    release(record_color_);
+    release(record_light_);
+    record_color_ = nil;
+    record_light_ = nil;
     release(camera_classify_pipeline_);
     release(camera_pack_pipeline_);
     release(camera_validate_pipeline_);
+    release(record_shade_pipeline_);
+    release(foliage_pipeline_);
     release(light_visibility_);
     release(light_visibility_pipeline_);
     release(query_pipeline_);
@@ -185,14 +191,17 @@ id Renderer::make_texture(unsigned long format, unsigned int width, unsigned int
     return texture;
 }
 bool Renderer::initialize(id layer, const Scene& scene, const std::string& shader_path,
-                          unsigned int samples, bool conv_fast, bool compact_camera) {
+                          const RendererConfiguration& configuration) {
+    const unsigned int samples = configuration.samples;
     if (samples != 1 && samples != 2 && samples != 4) {
         error_ = "Sample count must be one, two or four";
         return false;
     }
     samples_ = samples;
-    conv_fast_ = conv_fast;
-    compact_camera_ = compact_camera;
+    conv_fast_ = configuration.conv_fast;
+    compact_camera_ = configuration.compact_camera;
+    record_shading_ = configuration.record_shading && compact_camera_;
+    specialize_foliage_ = configuration.specialize_foliage && !conv_fast_;
     if (conv_fast_)
         samples_ = 1;
     source_vertices_ = scene.vertices().data();
@@ -227,6 +236,8 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         source = "#define SW_COMPACT_CAMERA 1\n" + source +
                  std::string(std::istreambuf_iterator<char>(camera), std::istreambuf_iterator<char>());
     }
+    if (record_shading_)
+        source = "#define SW_SHADE_RECORDS 1\n" + source;
     if (samples_ == 1)
         source = "#define SW_SINGLE_SAMPLE 1\n" + source;
     if (conv_fast_) {
@@ -272,6 +283,19 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
     if (pipeline_ == nil)
         error_ = error_text(error);
+    if (specialize_foliage_) {
+        id foliage_vertex = send<id>(library, "newFunctionWithName:", string("foliage_vertex"));
+        id foliage_fragment = send<id>(library, "newFunctionWithName:", string("foliage_fragment"));
+        send<void>(descriptor, "setVertexFunction:", foliage_vertex);
+        send<void>(descriptor, "setFragmentFunction:", foliage_fragment);
+        foliage_pipeline_ = send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
+        release(foliage_vertex);
+        release(foliage_fragment);
+        if (foliage_pipeline_ == nil)
+            error_ = error_text(error);
+        send<void>(descriptor, "setVertexFunction:", vertex);
+        send<void>(descriptor, "setFragmentFunction:", fragment);
+    }
     if (conv_fast_) {
         send<void>(attachment, "setBlendingEnabled:", static_cast<BOOL>(YES));
         send<void>(attachment, "setSourceRGBBlendFactor:", 4UL);
@@ -342,7 +366,12 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         id validate = send<id>(library, "newFunctionWithName:", string("validate_camera"));
         camera_validate_pipeline_ = send<id>(device_, "newComputePipelineStateWithFunction:error:", validate, &error);
         release(validate);
-        if (camera_validate_pipeline_ == nil || camera_classify_pipeline_ == nil ||
+        if (record_shading_) {
+            id shade = send<id>(library, "newFunctionWithName:", string("shade_camera"));
+            record_shade_pipeline_ = send<id>(device_, "newComputePipelineStateWithFunction:error:", shade, &error);
+            release(shade);
+        }
+        if ((record_shading_ && record_shade_pipeline_ == nil) || camera_validate_pipeline_ == nil || camera_classify_pipeline_ == nil ||
             camera_pack_pipeline_ == nil) {
             error_ = error_text(error);
             release(vertex);
@@ -408,7 +437,8 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
             error_ = error_text(error);
     }
     release(library);
-    if (pipeline_ == nil || shadow_pipeline_ == nil || background_pipeline_ == nil ||
+    if ((specialize_foliage_ && foliage_pipeline_ == nil) ||
+        pipeline_ == nil || shadow_pipeline_ == nil || background_pipeline_ == nil ||
         visibility_pipeline_ == nil || restore_pipeline_ == nil ||
         light_visibility_pipeline_ == nil || query_pipeline_ == nil ||
         (conv_fast_ && (conv_prepare_pipeline_ == nil || conv_classify_pipeline_ == nil ||
@@ -537,6 +567,12 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
             return false;
         }
     }
+    for (const id material : materials_)
+        statistics_.material_storage_bytes += send<unsigned long>(material, "allocatedSize");
+    statistics_.shadow_storage_bytes = send<unsigned long>(shadow_, "allocatedSize") +
+                                       send<unsigned long>(fixed_shadow_, "allocatedSize");
+    statistics_.geometry_storage_bytes = vertex_bytes + index_bytes + instance_bytes +
+                                         scene.actors().size() * sizeof(Actor);
     upload_actors(scene);
     if (vertices_ == nil || indices_ == nil || instances_ == nil || actors_ == nil ||
         shadow_ == nil || fixed_shadow_ == nil) {
@@ -757,10 +793,10 @@ void Renderer::resize(unsigned int width, unsigned int height) {
     id replacement = make_texture(252UL, width, height, 4UL, samples_, !conv_fast_);
     id color = samples_ > 1 ? make_texture(80UL, width, height, 4UL, samples_, true) : nil;
     id visibility_depth = retained_ ? make_texture(252UL, width, height, 5UL, samples_) : nil;
-    id light_visibility = retained_ ? make_texture(25UL, width, height, 5UL, samples_) : nil;
+    id light_visibility = retained_ && !record_shading_ ? make_texture(25UL, width, height, 5UL, samples_) : nil;
     std::array<id, 4> visibility{};
     bool complete = replacement != nil && (samples_ == 1 || color != nil) &&
-                    (!retained_ || (visibility_depth != nil && light_visibility != nil));
+                    (!retained_ || (visibility_depth != nil && (record_shading_ || light_visibility != nil)));
     for (std::size_t index = 0; retained_ && !compact_camera_ && index < visibility.size(); ++index) {
         visibility[index] = make_texture(visibility_formats[index], width, height, 5UL, samples_);
         complete = complete && visibility[index] != nil;
@@ -789,6 +825,10 @@ void Renderer::resize(unsigned int width, unsigned int height) {
     visibility_ = visibility;
     release(camera_map_);
     release(camera_records_);
+    release(record_color_);
+    release(record_light_);
+    record_color_ = nil;
+    record_light_ = nil;
     camera_map_ = nil;
     camera_records_ = nil;
     visibility_ready_ = false;
@@ -843,6 +883,8 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
             else
                 ++statistics_.fixed_camera_draws;
         }
+        if (pipeline == pipeline_ && specialize_foliage_)
+            send<void>(encoder, "setRenderPipelineState:", material == 10 ? foliage_pipeline_ : pipeline_);
         send<void>(encoder, "setFrontFacingWinding:", material >= 7 ? 1UL : 0UL);
         // Imported rock shells and fish bodies are closed, outward-wound meshes.
         // Keep foliage, fins and all other materials two-sided.
@@ -1133,8 +1175,20 @@ bool Renderer::register_camera(id& command, bool updated_shadows) {
     }
     release(camera_map_);
     release(camera_records_);
+    release(record_color_);
+    release(record_light_);
+    record_color_ = nil;
+    record_light_ = nil;
     camera_map_ = map;
     camera_records_ = records;
+    if (record_shading_) {
+        record_color_ = send<id>(device_, "newBufferWithLength:options:", static_cast<unsigned long>(total) * 4UL, 32UL);
+        record_light_ = send<id>(device_, "newBufferWithLength:options:", static_cast<unsigned long>(total) * 2UL, 32UL);
+        if (record_color_ == nil || record_light_ == nil) {
+            error_ = "Cannot allocate camera record lighting";
+            return false;
+        }
+    }
     // The command buffer owns acquisition textures through pack completion.
     for (id& texture : visibility_) {
         release(texture);
@@ -1143,7 +1197,8 @@ bool Renderer::register_camera(id& command, bool updated_shadows) {
     statistics_.camera_records = total;
     ++statistics_.camera_registration_builds;
     statistics_.retained_bytes =
-        pixels * (8UL + samples_ * 6UL) + static_cast<std::uint64_t>(total) * 28UL;
+        pixels * (8UL + samples_ * (record_shading_ ? 4UL : 6UL)) +
+        static_cast<std::uint64_t>(total) * (record_shading_ ? 34UL : 28UL);
     return true;
 }
 bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
@@ -1250,7 +1305,28 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         } else
             ++statistics_.visibility_reuses;
     }
-    if (retained_ && (!light_visibility_ready_ || updated_shadows)) {
+    if (retained_ && record_shading_) {
+        Uniforms shade_uniforms = uniforms;
+        shade_uniforms.clock.w = (!light_visibility_ready_ || updated_shadows) ? 1.0F : 0.0F;
+        id shade_encoder = send<id>(command, "computeCommandEncoder");
+        send<void>(shade_encoder, "setComputePipelineState:", record_shade_pipeline_);
+        send<void>(shade_encoder, "setBuffer:offset:atIndex:", camera_map_, 0UL, 0UL);
+        send<void>(shade_encoder, "setBuffer:offset:atIndex:", camera_records_, 0UL, 1UL);
+        send<void>(shade_encoder, "setBuffer:offset:atIndex:", record_color_, 0UL, 2UL);
+        send<void>(shade_encoder, "setBytes:length:atIndex:", static_cast<const void*>(&shade_uniforms),
+                   static_cast<unsigned long>(sizeof(shade_uniforms)), 3UL);
+        send<void>(shade_encoder, "setBuffer:offset:atIndex:", record_light_, 0UL, 4UL);
+        send<void>(shade_encoder, "setTexture:atIndex:", shadow_, 0UL);
+        struct Size { unsigned long width, height, depth; };
+        send<void>(shade_encoder, "dispatchThreads:threadsPerThreadgroup:",
+                   Size{static_cast<unsigned long>(width_) * height_, 1, 1}, Size{128, 1, 1});
+        send<void>(shade_encoder, "endEncoding");
+        if (shade_uniforms.clock.w != 0)
+            ++statistics_.light_visibility_builds;
+        else
+            ++statistics_.light_visibility_reuses;
+        light_visibility_ready_ = true;
+    } else if (retained_ && (!light_visibility_ready_ || updated_shadows)) {
         id light_pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
         id target =
             send<id>(send<id>(light_pass, "colorAttachments"), "objectAtIndexedSubscript:", 0UL);
@@ -1303,6 +1379,8 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
                        visibility_slots[index]);
         send<void>(encoder, "setFragmentTexture:atIndex:", visibility_depth_, 5UL);
         send<void>(encoder, "setFragmentTexture:atIndex:", light_visibility_, 6UL);
+        if (record_shading_)
+            send<void>(encoder, "setFragmentBuffer:offset:atIndex:", record_color_, 0UL, 10UL);
         if (compact_camera_) {
             send<void>(encoder, "setFragmentBuffer:offset:atIndex:", camera_map_, 0UL, 8UL);
             send<void>(encoder, "setFragmentBuffer:offset:atIndex:", camera_records_, 0UL, 9UL);

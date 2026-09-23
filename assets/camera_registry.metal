@@ -79,3 +79,36 @@ kernel void validate_camera(SW_TEXTURE<half> base [[texture(0)]],
         if(!same_record(expected,actual)) atomic_fetch_add_explicit(&errors,1,memory_order_relaxed);
     }
 }
+#ifdef SW_SHADE_RECORDS
+// Shade a distinct camera surface once, then let coverage samples share its
+// already-quantized render-target color. Shadow visibility stays half precision.
+kernel void shade_camera(const device uint2* map [[buffer(0)]],
+ const device CameraRecord* records [[buffer(1)]],device uint* colors [[buffer(2)]],
+ constant Uniforms& u [[buffer(3)]],device half* lights [[buffer(4)]],
+ depth2d<float> shadow [[texture(0)]],uint index [[thread_position_in_grid]]) {
+    uint2 pixel=uint2(index%uint(u.clock.y),index/uint(u.clock.y));
+    uint2 entry=map[index];
+    uint count=1+max(max(entry.y&3,(entry.y>>2)&3),max((entry.y>>4)&3,(entry.y>>6)&3));
+    for(uint selected=0;selected<count;++selected) {
+        uint address=entry.x+selected;
+        CameraRecord record=records[address];
+        float3 color;
+        if(record.words[5]==0) {
+            float2 uv=(float2(pixel)+0.5f)/u.clock.yz;
+            uv.y=1-uv.y;
+            color=pow(max(1-exp(-water_color(uv)*1.6f),0.0f),float3(1.0f/2.2f));
+        } else {
+            float4 base=float4(half4(as_type<half2>(record.words[0]),as_type<half2>(record.words[1])));
+            float4 surface=float4(half4(as_type<half2>(record.words[2]),as_type<half2>(record.words[3])));
+            LightingTerms terms={base.rgb,surface.rgb,base.a,surface.a};
+            float distance=as_type<float>(record.words[4]);
+            float2 correction=float2(as_type<half2>(record.words[6]));
+            float3 world=retained_world(pixel,distance,correction,u.reconstruction,u.clock.yz);
+            if(u.clock.w!=0) lights[address]=half(visibility(u.light*float4(world,1),shadow));
+            color=illuminate_fixed(terms,world,u,float(lights[address]));
+        }
+        uint3 codes=uint3(rint(clamp(color,0.0f,1.0f)*255.0f));
+        colors[address]=codes.r|(codes.g<<8)|(codes.b<<16);
+    }
+}
+#endif

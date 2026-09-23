@@ -141,6 +141,9 @@ void print_metrics() {
            << ",\n  \"peak_rss_bytes\": " << usage.ru_maxrss
            << ",\n  \"submit_wall_seconds\": " << render.cpu_submit_seconds
            << ",\n  \"static_upload_bytes\": " << render.static_upload_bytes
+           << ",\n  \"material_storage_bytes\": " << render.material_storage_bytes
+           << ",\n  \"shadow_storage_bytes\": " << render.shadow_storage_bytes
+           << ",\n  \"geometry_storage_bytes\": " << render.geometry_storage_bytes
            << ",\n  \"gpu_executed_seconds\": " << render.gpu_seconds
            << ",\n  \"gpu_timed_frames\": " << render.gpu_timed_frames
            << ",\n  \"gpu_shadow_frame_seconds\": " << render.gpu_shadow_frame_seconds
@@ -153,6 +156,8 @@ void print_metrics() {
            << ",\n  \"conv_static_updates\": " << render.conv_static_updates
            << ",\n  \"conv_moving_updates\": " << render.conv_moving_updates
            << ",\n  \"compact_camera\": " << (state.options.compact_camera ? "true" : "false")
+           << ",\n  \"record_shading\": " << (state.options.record_shading ? "true" : "false")
+           << ",\n  \"specialize_foliage\": " << (state.options.specialize_foliage ? "true" : "false")
            << ",\n  \"camera_records\": " << render.camera_records
            << ",\n  \"camera_registration_builds\": " << render.camera_registration_builds
            << ",\n  \"camera_acquisition_command_gpu_seconds\": " << render.camera_acquisition_command_gpu_seconds
@@ -450,8 +455,13 @@ int run_macos(const Options& options) {
         std::cerr << "Habitat: " << habitat_error << '\n';
         return 1;
     }
-    if (!state.renderer.initialize(state.layer, state.scene, shader_path, state.options.samples,
-                                   options.conv_fast, options.compact_camera)) {
+    const RendererConfiguration configuration{
+        .samples = options.samples,
+        .conv_fast = options.conv_fast,
+        .compact_camera = options.compact_camera,
+        .record_shading = options.record_shading,
+        .specialize_foliage = options.specialize_foliage};
+    if (!state.renderer.initialize(state.layer, state.scene, shader_path, configuration)) {
         std::cerr << state.renderer.error() << '\n';
         host = nullptr;
         return 1;

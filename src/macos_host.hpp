@@ -9,6 +9,8 @@ struct Options {
     bool retained{true};
     bool conv_fast{};
     bool compact_camera{true};
+    bool record_shading{};
+    bool specialize_foliage{true};
     double capture_time{};
     std::string verify_retained{};
     unsigned int fps{24};

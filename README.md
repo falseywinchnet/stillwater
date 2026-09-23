@@ -9,20 +9,30 @@ surface textures into a new renderer; its lighting and fish behavior are not yet
 exact reproduction. There is no image-generation content, video backdrop, web view,
 Swift, SwiftUI, or CloudKit in the app.
 
-The active MacBook Neo working copy and carried task context are documented in
-[the local handoff](docs/NEO_HANDOFF.md). The current renderer uses a compact
-position cache and memoryless temporary targets on Apple GPUs; see
-[Metal storage and Neo verification](docs/METAL_STORAGE.md).
+The renderer uses a compact camera-local surface registry, memoryless temporary
+targets on Apple GPUs, and a specialized foliage shader. The default remains
+4× MSAA at 24 fps. See [camera storage](docs/CAMERA_REGISTRY.md) and
+[render-cost measurements](docs/RENDER_COSTS.md) for measured results and limits.
+
+The source, scene archive, textures, upstream notices and diagnostic tools are
+included in this standalone repository. No sibling checkout or external service
+is required. Original Stillwater code is [MIT licensed](LICENSE).
+
+![Stillwater native aquarium](docs/images/stillwater.png)
 
 ## Run
 
-On macOS with Xcode command-line tools and CMake:
+On macOS with Xcode command-line tools, CMake 3.22 or newer, and a Metal-capable
+GPU. Apple Silicon is the measured target; other Macs are not yet validated:
 
 ```sh
+git clone https://github.com/falseywinchnet/stillwater.git
+cd stillwater
+python3 tools/check_assets.py
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
 ctest --test-dir build --output-on-failure
-open build/Stillwater.app --args --preview
+open build/Stillwater.app --args --preview --muted
 ```
 
 Launch without `--preview` for desktop placement. Click **◉** in the macOS menu
@@ -95,6 +105,21 @@ See [third-party credits](THIRD_PARTY.md), [engine design](docs/ENGINE.md),
 
 ## Diagnostics
 
+Python image comparisons use Pillow. Native verification needs a logged-in macOS
+GUI session with Metal; CI builds the macOS app and tests portable scene/sound
+logic, but does not claim GPU image validation on a hosted runner.
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements-dev.txt
+python3 tools/verify_native.py
+python3 tools/measure_render_costs.py
+```
+
+The build and portable core tests also run on Linux with CMake, a C++20 compiler
+and zlib development headers. The desktop host is macOS-only. Additional tools:
+
 ```sh
 python3 tools/measure.py --seconds 20
 python3 tools/measure.py --compare-gpu --seconds 15
@@ -120,3 +145,14 @@ At the Neo's 1408×881 size, it preserves the four depth samples while sharing
 identical shading records inside each pixel. Use `--dense-camera` to compare the
 previous cache. See [CAMERA_REGISTRY.md](docs/CAMERA_REGISTRY.md) for the data
 contract, measurements and the remaining geometric CONV work.
+
+`--generic-foliage` selects the earlier general-purpose shader for matched
+profiling. `--record-shading` is an optional experiment that replaces the retained
+multisample shadow-visibility texture with per-record lighting and color buffers;
+its timing benefit is inconsistent, so it is not the default.
+
+For reproducible performance measurements, close other GPU-heavy applications,
+keep the aquarium visible, and report hardware, dimensions, sample count and
+frame cap with the raw JSON. Historical receipts include local paths for
+provenance; these paths are not build dependencies. Generated build directories,
+app bundles and temporary experiment captures are excluded from Git.

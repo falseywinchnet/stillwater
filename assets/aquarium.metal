@@ -313,14 +313,24 @@ CameraRecord camera_record(uint2 pixel,uint sample,uint width,
 #else
 #define SW_CAMERA_INPUT
 #endif
+#ifdef SW_SHADE_RECORDS
+#define SW_SHADED_INPUT ,const device uint* record_colors [[buffer(10)]]
+#else
+#define SW_SHADED_INPUT
+#endif
 struct RestoredSurface { float4 color [[color(0)]]; float depth [[depth(any)]]; };
 fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[sample_id]],
  constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
  SW_TEXTURE<half> base [[texture(1)]],SW_TEXTURE<half> surface [[texture(2)]],
  SW_TEXTURE<float> distance_identity [[texture(4)]],SW_TEXTURE<half> center_correction [[texture(7)]],
- SW_DEPTH<float> depth [[texture(5)]],SW_TEXTURE<half> light_visibility [[texture(6)]] SW_CAMERA_INPUT) {
+ SW_DEPTH<float> depth [[texture(5)]],SW_TEXTURE<half> light_visibility [[texture(6)]] SW_CAMERA_INPUT SW_SHADED_INPUT) {
     uint2 pixel=uint2(in.position.xy);
     float z=SW_READ(depth,pixel,sample);
+#ifdef SW_SHADE_RECORDS
+    uint2 entry=camera_map[pixel.y*uint(u.clock.y)+pixel.x];
+    uint color=record_colors[entry.x+((entry.y>>(sample*2))&3)];
+    return {float4(float3(color&255,(color>>8)&255,(color>>16)&255)/255.0f,1),z};
+#else
     if(z>=1) {
         float3 color=pow(max(1-exp(-water_color(in.uv)*1.6f),0.0f),float3(1.0f/2.2f));
         return {float4(color,1),1};
@@ -344,6 +354,7 @@ fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[
     float visible=float(SW_READ(light_visibility,pixel,sample).r);
     float3 color=illuminate_fixed(terms,world,u,visible);
     return {float4(color,1),z};
+#endif
 }
 // This source-to-receiver visibility is recomputed only when its shadow map or
 // retained camera surfaces change; animated caustics remain evaluated every frame.
@@ -494,4 +505,26 @@ fragment float4 tank_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(
  texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
  texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
     return shade_tank(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
+}
+
+// The foliage batch has one known material. Expose that invariant to the shader
+// compiler instead of carrying the fish/rock/prototype branches through it.
+vertex Out foliage_vertex(uint vertex_id [[vertex_id]],uint instance_id [[instance_id]],
+ constant Vertex* vertices [[buffer(0)]],constant Instance* instances [[buffer(1)]],
+ constant Actor* actors [[buffer(2)]],constant Uniforms& u [[buffer(3)]]) {
+    Vertex sample=vertices[vertex_id];
+    uint index=sample.binding.y>0.5f ? uint(sample.binding.x) : instance_id;
+    Instance instance=instances[index];
+    instance.behavior.x=10;
+    Out out=prepare(sample,instance,actors,u);
+    out.identity=index+1;
+    return out;
+}
+fragment float4 foliage_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],
+ depth2d<float> shadow [[texture(0)]],texture2d<float> sand [[texture(1)]],
+ texture2d<float> sand_normal [[texture(2)]],texture2d<float> rock [[texture(3)]],
+ texture2d<float> rock_normal [[texture(4)]],texture2d<float> wood [[texture(5)]],
+ texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
+    in.behavior.x=10;
+    return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
 }

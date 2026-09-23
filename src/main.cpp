@@ -33,6 +33,12 @@ int main(int argc, char** argv) {
             options.smoke_tap = true;
         else if (std::strcmp(argument, "--full-redraw") == 0)
             options.retained = false;
+        else if (std::strcmp(argument, "--generic-foliage") == 0)
+            options.specialize_foliage = false;
+        else if (std::strcmp(argument, "--specialize-foliage") == 0)
+            options.specialize_foliage = true;
+        else if (std::strcmp(argument, "--record-shading") == 0)
+            options.record_shading = true;
         else if (std::strcmp(argument, "--dense-camera") == 0)
             options.compact_camera = false;
         else if (std::strcmp(argument, "--compact-camera") == 0)
@@ -88,7 +94,7 @@ int main(int argc, char** argv) {
             std::cout << "Stillwater [--desktop|--preview] [--muted] [--paused] [--fps 1..60]\n  "
                          "[--capture file.png] [--metrics file.json] [--quit-after seconds]\n  "
                          "[--msaa 2|4] [--aa msaa|point|conv-fast] [--render-scale 0.5..1]\n  "
-                         "[--compact-camera|--dense-camera] [--full-redraw] [--verify-retained directory] [--capture-time seconds]\n  "
+                         "[--record-shading] [--specialize-foliage|--generic-foliage] [--compact-camera|--dense-camera] [--full-redraw] [--verify-retained directory] [--capture-time seconds]\n  "
                          "[--export-tap file.wav] [--export-ambience file.wav]\n";
             return std::strcmp(argument, "--help") == 0 ? 0 : 2;
         }
@@ -97,6 +103,10 @@ int main(int argc, char** argv) {
         options.samples = 1;
     if (options.samples == 1)
         options.compact_camera = false;
+    if (options.conv_fast)
+        options.specialize_foliage = false;
+    if (options.record_shading && !options.compact_camera)
+        return 2;
     if (options.capture_time != 0 && !options.paused)
         return 2;
     return stillwater::run_macos(options);

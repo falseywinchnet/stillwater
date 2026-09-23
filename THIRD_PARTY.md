@@ -1,5 +1,8 @@
 # Third-party sources
 
+Original Stillwater code is available under the root [MIT license](LICENSE).
+The separately attributed code and assets below keep their existing notices.
+
 ## Desktop Habitats / Riverscape
 
 Author: Chase Lean. License: MIT.

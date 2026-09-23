@@ -30,8 +30,9 @@ A rich, interactive desktop aquarium with very low recurring CPU work.
 
 ## MacBook Neo continuation
 
-- The authoritative working tree is `/Users/ultimussecundai/stillwater`; read
-  `docs/NEO_HANDOFF.md` and `docs/METAL_STORAGE.md` before further optimization.
+- Work from this repository's root; read `docs/NEO_HANDOFF.md` and
+  `docs/METAL_STORAGE.md` before further optimization. The handoff's absolute
+  paths are historical provenance, not required locations for a clone.
 - The target is an A18 Pro with 8 GiB unified memory. Measure on this device;
   do not substitute the M4 timings or reduce quality without naming that tradeoff.
 - Keep per-sample raster depth distinct from the shading-center distance and its
@@ -69,3 +70,24 @@ A rich, interactive desktop aquarium with very low recurring CPU work.
   identity, world-coordinate and depth gates at both sample counts.
 - This is camera-local storage, not analytic CONV coverage or sparse tile repair.
   A future geometric registry must conservatively include unsampled thin features.
+
+## Render-cost specialization
+
+- The default foliage pipeline specializes the imported Riverscape leaf material;
+  preserve its geometry, animation and opacity formulas. `--generic-foliage`
+  selects the previous general shader. Read `docs/RENDER_COSTS.md`.
+- `--record-shading` is optional: fewer framebuffers did not consistently mean
+  lower GPU time. Keep its light-cache invalidation and pre-resolve RGB8 contract.
+- Original triangle order is deliberate. A front-to-back experiment changed
+  sparse pixels beyond tolerance and was rejected; do not silently reintroduce it.
+- Run native 2×/4× tests and compare shader changes with `tools/compare_renderer.py`.
+  Continue using the stricter `compare_storage.py` for storage-only changes.
+
+## Standalone public repository
+
+- This repository is `falseywinchnet/stillwater`; `paymenottowork` is not a source
+  dependency. Build from the checked-in assets with no sibling checkout.
+- Original code is MIT; keep the upstream and CC0 notices in `THIRD_PARTY.md`.
+- `tools/check_assets.py` verifies `assets/SHA256SUMS`; regenerate checksums after
+  intentional resource edits. Do not commit build directories, app bundles or
+  temporary browser profiles. Keep reproducible measurements under docs/evidence.

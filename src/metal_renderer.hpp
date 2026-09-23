@@ -6,6 +6,7 @@ namespace stillwater {
 struct RenderStatistics {
     std::uint64_t frames{};
     std::uint64_t static_upload_bytes{};
+    std::uint64_t material_storage_bytes{}, shadow_storage_bytes{}, geometry_storage_bytes{};
     std::uint64_t actor_upload_bytes{};
     std::uint64_t instance_patch_bytes{};
     std::uint64_t static_shadow_builds{}, dynamic_shadow_frames{};
@@ -25,6 +26,13 @@ struct RenderStatistics {
     std::uint64_t camera_records{}, camera_registration_builds{}, camera_validated_samples{};
     double camera_acquisition_command_gpu_seconds{};
 };
+struct RendererConfiguration {
+    unsigned int samples{4};
+    bool conv_fast{};
+    bool compact_camera{true};
+    bool record_shading{};
+    bool specialize_foliage{true};
+};
 struct VisibilityProbe {
     std::array<Float4, 4> samples{};
     Float4 depths{};
@@ -36,7 +44,7 @@ class Renderer final {
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
     bool initialize(id layer, const Scene& scene, const std::string& shader_path,
-                    unsigned int samples, bool conv_fast = false, bool compact_camera = false);
+                    const RendererConfiguration& configuration);
     void resize(unsigned int width, unsigned int height);
     void set_retained(bool enabled);
     void set_camera_validation(bool enabled) {
@@ -97,6 +105,10 @@ class Renderer final {
     bool memoryless_supported_{};
     bool conv_fast_{};
     bool compact_camera_{};
+    bool record_shading_{};
+    bool specialize_foliage_{};
+    id foliage_pipeline_{nil};
+    id record_shade_pipeline_{nil}, record_color_{nil}, record_light_{nil};
     bool validate_camera_{};
     id camera_validate_pipeline_{nil};
     id camera_map_{nil}, camera_records_{nil};
