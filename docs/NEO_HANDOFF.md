@@ -54,3 +54,9 @@ open build/Stillwater.app --args --desktop --muted
 
 The app remains a local development bundle. There is no login item or change to
 system wallpaper settings. The working copy, not the M4 copy, owns new edits.
+
+## Menu-bar correction
+
+The owner clarified that the top control means a macOS menu-bar dropdown.
+The carried-over floating panel has been removed; the ◉ status item provides
+all actions. Earlier widget measurements describe the prior UI.

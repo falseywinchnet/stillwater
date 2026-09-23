@@ -7,6 +7,8 @@ struct Options {
     bool paused{};
     bool smoke_tap{};
     bool retained{true};
+    bool conv_fast{};
+    double capture_time{};
     std::string verify_retained{};
     unsigned int fps{24};
     unsigned int samples{4};

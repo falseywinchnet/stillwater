@@ -125,8 +125,8 @@ All scene mutations happen on the main event context. Audio callbacks read their
 prepared sound and cursor; synchronous queue stop precedes reuse or disposal.
 
 Normal desktop placement is below desktop icons and ignores input. Explicit tap
-mode is above those icons and below ordinary apps. The separate control widget
-turns taps off. Both panels reject keyboard focus, and all application keyboard
+mode is above those icons and below ordinary apps. The menu-bar dropdown
+turns taps off and remains reachable in both placements. The aquarium rejects keyboard focus, and all application keyboard
 handlers and menu key equivalents are absent. There is no global
 mouse hook. Main-display support is the current scope; display reconfiguration and
 multi-display lifecycle need a dedicated follow-up.

@@ -33,7 +33,23 @@ int main(int argc, char** argv) {
             options.smoke_tap = true;
         else if (std::strcmp(argument, "--full-redraw") == 0)
             options.retained = false;
-        else if (std::strcmp(argument, "--verify-retained") == 0 && index + 1 < argc)
+        else if (std::strcmp(argument, "--aa") == 0 && index + 1 < argc) {
+            const char* mode = argv[++index];
+            if (std::strcmp(mode, "conv-fast") == 0) {
+                options.conv_fast = true;
+                options.samples = 1;
+            } else if (std::strcmp(mode, "point") == 0) {
+                options.conv_fast = false;
+                options.samples = 1;
+            } else if (std::strcmp(mode, "msaa") == 0) {
+                options.conv_fast = false;
+                options.samples = 4;
+            } else
+                return 2;
+        } else if (std::strcmp(argument, "--capture-time") == 0 && index + 1 < argc) {
+            if (!parse_number(argv[++index], options.capture_time) || options.capture_time < 0)
+                return 2;
+        } else if (std::strcmp(argument, "--verify-retained") == 0 && index + 1 < argc)
             options.verify_retained = argv[++index];
         else if (std::strcmp(argument, "--capture") == 0 && index + 1 < argc)
             options.capture = argv[++index];
@@ -67,11 +83,15 @@ int main(int argc, char** argv) {
         } else {
             std::cout << "Stillwater [--desktop|--preview] [--muted] [--paused] [--fps 1..60]\n  "
                          "[--capture file.png] [--metrics file.json] [--quit-after seconds]\n  "
-                         "[--msaa 2|4] [--render-scale 0.5..1]\n  "
-                         "[--full-redraw] [--verify-retained directory]\n  "
+                         "[--msaa 2|4] [--aa msaa|point|conv-fast] [--render-scale 0.5..1]\n  "
+                         "[--full-redraw] [--verify-retained directory] [--capture-time seconds]\n  "
                          "[--export-tap file.wav] [--export-ambience file.wav]\n";
             return std::strcmp(argument, "--help") == 0 ? 0 : 2;
         }
     }
+    if (options.conv_fast)
+        options.samples = 1;
+    if (options.capture_time != 0 && !options.paused)
+        return 2;
     return stillwater::run_macos(options);
 }

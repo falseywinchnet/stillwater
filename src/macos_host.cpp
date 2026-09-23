@@ -25,12 +25,11 @@ struct Host {
     Audio audio{};
     id app{nil}, window{nil}, view{nil}, layer{nil}, delegate{nil}, status{nil};
     id pause_item{nil}, sound_item{nil}, desktop_item{nil}, tap_item{nil};
-    id controls{nil}, pause_button{nil}, sound_button{nil}, tap_button{nil}, placement_button{nil};
     dispatch_source_t frames{nullptr}, quit_timer{nullptr};
     Clock::time_point began{Clock::now()};
     double paused_time{}, pause_started{};
     bool paused{}, occluded{}, sleeping{}, tap_mode{}, audio_ready{}, quitting{}, captured{},
-        smoke_tapped{};
+        smoke_tapped{}, renderer_failed{};
     double width{1100}, height{700};
     std::uint64_t taps{};
     double wall_time() const {
@@ -86,13 +85,7 @@ void update_menu() {
     send<void>(state.sound_item, "setState:", state.audio.enabled() ? 1L : 0L);
     send<void>(state.desktop_item, "setState:", state.options.desktop ? 1L : 0L);
     send<void>(state.tap_item, "setState:", state.tap_mode ? 1L : 0L);
-    send<void>(state.pause_button, "setTitle:", string(state.paused ? "Resume" : "Pause"));
-    send<void>(state.sound_button,
-               "setTitle:", string(state.options.muted ? "Sound off" : "Sound on"));
-    send<void>(state.tap_button,
-               "setTitle:", string(state.tap_mode ? "Desktop taps on" : "Desktop taps off"));
-    send<void>(state.placement_button,
-               "setTitle:", string(state.options.desktop ? "Open window" : "On desktop"));
+
 }
 void apply_placement() {
     Host& state = *host;
@@ -124,9 +117,7 @@ void apply_placement() {
                    static_cast<BOOL>(YES));
         send<void>(state.window, "orderFrontRegardless");
     }
-    // Both panels are nonactivating and never become keyboard targets.
-    send<void>(state.controls, "orderFrontRegardless");
-    send<void>(state.controls, "makeMainWindow");
+    // The aquarium remains nonactivating; controls live in the menu bar.
     resize_scene();
     update_menu();
 }
@@ -156,7 +147,13 @@ void print_metrics() {
            << ",\n  \"gpu_shadow_frames\": " << render.gpu_shadow_frames
            << ",\n  \"gpu_reuse_frame_seconds\": " << render.gpu_reuse_frame_seconds
            << ",\n  \"gpu_reuse_frames\": " << render.gpu_reuse_frames
+           << ",\n  \"conv_storage_bytes\": " << render.conv_storage_bytes
+           << ",\n  \"conv_source_triangles\": " << render.conv_source_triangles
+           << ",\n  \"conv_boundary_triangles\": " << render.conv_boundary_triangles
+           << ",\n  \"conv_static_updates\": " << render.conv_static_updates
+           << ",\n  \"conv_moving_updates\": " << render.conv_moving_updates
            << ",\n  \"msaa_samples\": " << state.options.samples
+           << ",\n  \"conv_fast\": " << (state.options.conv_fast ? "true" : "false")
            << ",\n  \"render_scale\": " << state.options.render_scale
            << ",\n  \"requested_fps\": " << state.options.fps
            << ",\n  \"actor_upload_bytes\": " << render.actor_upload_bytes
@@ -179,14 +176,13 @@ void print_metrics() {
            << ",\n  \"actor_edits\": " << scene.actor_edits << ",\n  \"taps\": " << state.taps
            << ",\n  \"paused\": " << (state.paused ? "true" : "false")
            << ",\n  \"desktop\": " << (state.options.desktop ? "true" : "false")
+           << ",\n  \"menu_bar_visible\": " << (send<BOOL>(state.status, "isVisible") ? "true" : "false")
            << ",\n  \"aquarium_accepts_keyboard\": "
            << (send<BOOL>(state.window, "canBecomeKeyWindow") ? "true" : "false")
-           << ",\n  \"controls_accept_keyboard\": "
-           << (send<BOOL>(state.controls, "canBecomeKeyWindow") ? "true" : "false")
+
            << ",\n  \"aquarium_is_key\": "
            << (send<BOOL>(state.window, "isKeyWindow") ? "true" : "false")
-           << ",\n  \"controls_are_key\": "
-           << (send<BOOL>(state.controls, "isKeyWindow") ? "true" : "false")
+
            << ",\n  \"window_level\": " << send<long>(state.window, "level")
            << ",\n  \"ignores_mouse\": "
            << (send<BOOL>(state.window, "ignoresMouseEvents") ? "true" : "false")
@@ -203,6 +199,10 @@ void request_quit() {
     stop_source(state.frames);
     stop_source(state.quit_timer);
     state.audio.set_ambience(false);
+    if (!state.renderer.finish_pending(true)) {
+        state.renderer_failed = true;
+        std::cerr << "Renderer: " << state.renderer.error() << '\n';
+    }
     print_metrics();
     send<void>(state.app, "stop:", static_cast<id>(nil));
     id event = send<id>(type("NSEvent"),
@@ -260,9 +260,6 @@ void resized(id, SEL, id) {
 }
 BOOL reject_keyboard(id, SEL) {
     return NO;
-}
-BOOL allow_main(id, SEL) {
-    return YES;
 }
 BOOL first_mouse(id, SEL, id) {
     return YES;
@@ -323,6 +320,7 @@ void frame(void*) {
         capture = state.options.capture.c_str();
     const bool success = state.renderer.draw(state.scene, state.scene_time(), capture);
     if (!success && !state.renderer.error().empty()) {
+        state.renderer_failed = true;
         std::cerr << "Renderer: " << state.renderer.error() << '\n';
         request_quit();
         return;
@@ -376,68 +374,10 @@ void install_menu(Host& state) {
     id button = send<id>(state.status, "button");
     send<void>(button, "setTitle:", string("◉"));
     send<void>(button, "setToolTip:", string("Stillwater aquarium"));
+    send<void>(button, "setAccessibilityLabel:", string("Stillwater"));
     send<void>(state.status, "setMenu:", menu);
     send<void>(state.view, "setMenu:", menu);
     release(menu);
-}
-// The controls are a separate, nonactivating native panel. They remain reachable
-// above the desktop without taking keyboard focus away from the user's application.
-id control_button(id content, id delegate, const char* title, const char* action, double x,
-                  double width) {
-    id button = send<id>(send<id>(type("NSButton"), "alloc"),
-                         "initWithFrame:", CGRectMake(x, 9, width, 30));
-    send<void>(button, "setTitle:", string(title));
-    send<void>(button, "setButtonType:", 0UL);
-    send<void>(button, "setBezelStyle:", 1UL);
-    send<void>(button, "setFont:", send<id>(type("NSFont"), "systemFontOfSize:", 12.0));
-    send<void>(button, "setRefusesFirstResponder:", static_cast<BOOL>(YES));
-    send<void>(button, "setFocusRingType:", 1UL);
-    send<void>(button, "setTarget:", delegate);
-    send<void>(button, "setAction:", sel_registerName(action));
-    send<void>(content, "addSubview:", button);
-    release(button);
-    return button; // Borrowed for the lifetime of the panel's content view.
-}
-void install_controls(Host& state) {
-    const CGRect screen = object_rect(send<id>(type("NSScreen"), "mainScreen"), "visibleFrame");
-    const CGRect frame = CGRectMake(screen.origin.x + (screen.size.width - 620) / 2,
-                                    screen.origin.y + screen.size.height - 62, 620, 48);
-    state.controls = send<id>(send<id>(type("StillwaterControls"), "alloc"),
-                              "initWithContentRect:styleMask:backing:defer:", frame, 128UL, 2UL,
-                              static_cast<BOOL>(NO));
-    send<void>(state.controls, "setTitle:", string("Stillwater controls"));
-    send<void>(state.controls, "setReleasedWhenClosed:", static_cast<BOOL>(NO));
-    send<void>(state.controls, "setHidesOnDeactivate:", static_cast<BOOL>(NO));
-    send<void>(state.controls, "setFloatingPanel:", static_cast<BOOL>(YES));
-    send<void>(state.controls, "setLevel:", 3L);
-    send<void>(state.controls, "setCollectionBehavior:", 1UL | 16UL | 64UL);
-    send<void>(state.controls, "setMovableByWindowBackground:", static_cast<BOOL>(YES));
-    send<void>(state.controls, "setOpaque:", static_cast<BOOL>(NO));
-    send<void>(state.controls, "setBackgroundColor:", send<id>(type("NSColor"), "clearColor"));
-    send<void>(state.controls, "setHasShadow:", static_cast<BOOL>(YES));
-    id content = send<id>(send<id>(type("NSVisualEffectView"), "alloc"),
-                          "initWithFrame:", CGRectMake(0, 0, 620, 48));
-    send<void>(content, "setMaterial:", 13L);
-    send<void>(content, "setBlendingMode:", 0L);
-    send<void>(content, "setState:", 1L);
-    send<void>(content, "setWantsLayer:", static_cast<BOOL>(YES));
-    id layer = send<id>(content, "layer");
-    send<void>(layer, "setCornerRadius:", 12.0);
-    send<void>(layer, "setMasksToBounds:", static_cast<BOOL>(YES));
-    id label = send<id>(type("NSTextField"), "labelWithString:", string("Stillwater"));
-    send<void>(label, "setFrame:", CGRectMake(16, 15, 83, 20));
-    send<void>(label, "setFont:", send<id>(type("NSFont"), "boldSystemFontOfSize:", 13.0));
-    send<void>(content, "addSubview:", label);
-    state.pause_button = control_button(content, state.delegate, "Pause", "togglePause:", 104, 72);
-    state.sound_button =
-        control_button(content, state.delegate, "Sound off", "toggleSound:", 180, 92);
-    state.tap_button =
-        control_button(content, state.delegate, "Desktop taps off", "toggleTap:", 276, 130);
-    state.placement_button =
-        control_button(content, state.delegate, "On desktop", "toggleDesktop:", 410, 112);
-    control_button(content, state.delegate, "Quit", "quit:", 528, 76);
-    send<void>(state.controls, "setContentView:", content);
-    release(content);
 }
 } // namespace
 int run_macos(const Options& options) {
@@ -470,11 +410,6 @@ int run_macos(const Options& options) {
     method(window_class, "canBecomeKeyWindow", &reject_keyboard, "B@:");
     method(window_class, "canBecomeMainWindow", &reject_keyboard, "B@:");
     objc_registerClassPair(window_class);
-    Class controls_class =
-        objc_allocateClassPair(objc_getClass("NSPanel"), "StillwaterControls", 0);
-    method(controls_class, "canBecomeKeyWindow", &reject_keyboard, "B@:");
-    method(controls_class, "canBecomeMainWindow", &allow_main, "B@:");
-    objc_registerClassPair(controls_class);
     state.app = send<id>(type("NSApplication"), "sharedApplication");
     send<BOOL>(state.app, "setActivationPolicy:", 1L);
     state.delegate = apple::make("StillwaterDelegate");
@@ -496,7 +431,7 @@ int run_macos(const Options& options) {
     send<void>(state.view, "setAccessibilityElement:", static_cast<BOOL>(YES));
     send<void>(state.view, "setAccessibilityRole:", string("AXImage"));
     send<void>(state.view, "setAccessibilityLabel:",
-               string("Aquarium. Click to tap the glass. Controls are in the Stillwater widget."));
+               string("Aquarium. Click to tap the glass. Controls are in the Stillwater menu bar menu."));
     state.layer = apple::make("CAMetalLayer");
     send<void>(state.layer, "setOpaque:", static_cast<BOOL>(YES));
     send<void>(state.view, "setLayer:", state.layer);
@@ -511,7 +446,7 @@ int run_macos(const Options& options) {
         std::cerr << "Habitat: " << habitat_error << '\n';
         return 1;
     }
-    if (!state.renderer.initialize(state.layer, state.scene, shader_path, state.options.samples)) {
+    if (!state.renderer.initialize(state.layer, state.scene, shader_path, state.options.samples, options.conv_fast)) {
         std::cerr << state.renderer.error() << '\n';
         host = nullptr;
         return 1;
@@ -520,7 +455,6 @@ int run_macos(const Options& options) {
     if (!state.audio_ready)
         std::cerr << "Audio unavailable; aquarium remains usable.\n";
     install_menu(state);
-    install_controls(state);
     send<void>(state.app, "finishLaunching");
     apply_placement();
     id workspace = send<id>(type("NSWorkspace"), "sharedWorkspace");
@@ -538,7 +472,7 @@ int run_macos(const Options& options) {
     state.began = Clock::now();
     state.pause_started = 0;
     if (options.verify_retained.empty()) {
-        state.renderer.draw(state.scene, 0,
+        state.renderer.draw(state.scene, options.capture_time,
                             options.paused && !options.capture.empty() ? options.capture.c_str()
                                                                        : nullptr);
         if (!options.muted && !state.paused)
@@ -568,14 +502,12 @@ int run_macos(const Options& options) {
     send<void>(state.window, "close");
     send<void>(send<id>(type("NSStatusBar"), "systemStatusBar"), "removeStatusItem:", state.status);
     send<void>(state.app, "setDelegate:", static_cast<id>(nil));
-    send<void>(state.controls, "close");
-    release(state.controls);
     release(state.status);
     release(state.window);
     release(state.view);
     release(state.layer);
     release(state.delegate);
     host = nullptr;
-    return verification_ok ? 0 : 1;
+    return verification_ok && !state.renderer_failed ? 0 : 1;
 }
 } // namespace stillwater

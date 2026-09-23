@@ -25,17 +25,16 @@ ctest --test-dir build --output-on-failure
 open build/Stillwater.app --args --preview
 ```
 
-Launch without `--preview` for desktop placement. A compact **Stillwater** widget
-sits near the top of the screen. Drag its background to move it. Its buttons control
-pause/resume, sound, desktop taps, window/desktop placement, and quitting.
-The **◉** menu-bar item and the aquarium's right-click menu expose the same actions.
+Launch without `--preview` for desktop placement. Click **◉** in the macOS menu
+bar to open Stillwater's dropdown: pause/resume, sound, desktop taps,
+window/desktop placement, and quit. There is no floating control strip.
+The aquarium's right-click menu exposes the same actions.
 
 - Click the preview to tap the glass and startle nearby fish.
 - Normal desktop mode passes clicks through to Finder.
-- **Desktop taps on** temporarily places the aquarium above desktop icons and
-  accepts taps. Click that same button to turn taps off and restore desktop access.
-- The widget remains above the aquarium in both modes.
-- The aquarium and widget never become keyboard targets. There are no Escape,
+- **Allow desktop taps** temporarily places the aquarium above desktop icons and
+  accepts taps. Uncheck it in the menu bar to restore desktop access.
+- The aquarium never becomes a keyboard target. There are no Escape,
   Space, letter-key, or Command-Q handlers, and no menu keyboard shortcuts.
 - Closing the preview returns it to the desktop.
 - `--muted` starts silently. `--fps 1..60` changes the animation rate; default 24.
@@ -110,3 +109,8 @@ ctest --test-dir build-sanitize --output-on-failure
 
 `--capture /absolute/path.png` reads our own Metal render target and saves a PNG.
 `--export-tap file.wav` and `--export-ambience file.wav` export the synthesized audio.
+
+The optional `--aa conv-fast` geometry-coverage experiment and `--aa point`
+control are documented in [CONV_AA.md](docs/CONV_AA.md). Normal launches keep
+4× MSAA. The experimental path has unresolved overlap and alpha-to-coverage
+quality differences, and is not the default.

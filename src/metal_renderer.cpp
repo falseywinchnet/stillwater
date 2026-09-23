@@ -7,6 +7,8 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
+#include <unordered_map>
 #include <simd/simd.h>
 extern "C" id MTLCreateSystemDefaultDevice();
 namespace stillwater {
@@ -89,7 +91,9 @@ bool save_png(id texture, id queue, unsigned int width, unsigned int height, con
     }
     void* bytes = send<void*>(buffer, "contents");
     CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    const CGBitmapInfo bitmap_info = static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedFirst) |
+    // CAMetalLayer is opaque. The render target alpha also carries material
+    // coverage; interpreting RGB as premultiplied would brighten PNG captures.
+    const CGBitmapInfo bitmap_info = static_cast<CGBitmapInfo>(kCGImageAlphaNoneSkipFirst) |
                                      static_cast<CGBitmapInfo>(kCGBitmapByteOrder32Little);
     CGContextRef context =
         CGBitmapContextCreate(bytes, width, height, 8, stride, space, bitmap_info);
@@ -118,6 +122,7 @@ bool save_png(id texture, id queue, unsigned int width, unsigned int height, con
 }
 } // namespace
 Renderer::~Renderer() {
+    finish_pending(true);
     for (const id material : materials_)
         release(material);
     for (const id texture : visibility_)
@@ -129,7 +134,6 @@ Renderer::~Renderer() {
     release(visibility_pipeline_);
     release(restore_pipeline_);
     release(restore_depth_state_);
-    release(previous_command_);
     release(color_);
     release(shadow_);
     release(fixed_shadow_);
@@ -142,6 +146,18 @@ Renderer::~Renderer() {
     release(background_pipeline_);
     release(shadow_pipeline_);
     release(pipeline_);
+    release(conv_pipeline_);
+    release(conv_depth_state_);
+    release(conv_prepare_pipeline_);
+    release(conv_prepared_);
+    release(conv_classify_pipeline_);
+    release(conv_adjacency_);
+    release(conv_list_);
+    release(conv_arguments_);
+    release(conv_prefix_pipeline_);
+    release(conv_compact_pipeline_);
+    release(conv_masks_);
+    release(conv_counts_);
     release(queue_);
     release(device_);
     release(layer_);
@@ -164,12 +180,15 @@ id Renderer::make_texture(unsigned long format, unsigned int width, unsigned int
     return texture;
 }
 bool Renderer::initialize(id layer, const Scene& scene, const std::string& shader_path,
-                          unsigned int samples) {
-    if (samples != 2 && samples != 4) {
-        error_ = "MSAA must use two or four samples";
+                          unsigned int samples, bool conv_fast) {
+    if (samples != 1 && samples != 2 && samples != 4) {
+        error_ = "Sample count must be one, two or four";
         return false;
     }
     samples_ = samples;
+    conv_fast_ = conv_fast;
+    if (conv_fast_)
+        samples_ = 1;
     source_vertices_ = scene.vertices().data();
     source_indices_ = scene.indices().data();
     source_instances_ = scene.instances().size();
@@ -191,18 +210,38 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         error_ = "Cannot open aquarium.metal";
         return false;
     }
-    const std::string source{std::istreambuf_iterator<char>(file),
-                             std::istreambuf_iterator<char>()};
+    std::string source{std::istreambuf_iterator<char>(file),
+                       std::istreambuf_iterator<char>()};
+    if (samples_ == 1)
+        source = "#define SW_SINGLE_SAMPLE 1\n" + source;
+    if (conv_fast_) {
+        const std::string root = shader_path.substr(0, shader_path.find_last_of('/'));
+        for (const char* name : {"conv_coverage.metal", "conv_geometry.metal"}) {
+            std::ifstream extra(root + "/" + name);
+            if (!extra) {
+                error_ = std::string("Cannot open ") + name;
+                return false;
+            }
+            source += std::string(std::istreambuf_iterator<char>(extra),
+                                  std::istreambuf_iterator<char>());
+        }
+    }
     id error = nil;
+    id compile_options = nil;
+    if (conv_fast_) {
+        compile_options = apple::make("MTLCompileOptions");
+        send<void>(compile_options, "setFastMathEnabled:", static_cast<BOOL>(YES));
+    }
     id library = send<id>(device_, "newLibraryWithSource:options:error:", string(source.c_str()),
-                          static_cast<id>(nil), &error);
+                          compile_options, &error);
+    release(compile_options);
     if (library == nil) {
         error_ = error_text(error);
         return false;
     }
-    id vertex = send<id>(library, "newFunctionWithName:", string("tank_vertex"));
+    id vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_regular_vertex" : "tank_vertex"));
     id fragment = send<id>(library, "newFunctionWithName:", string("tank_fragment"));
-    id shadow_vertex = send<id>(library, "newFunctionWithName:", string("shadow_vertex"));
+    id shadow_vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_shadow_vertex" : "shadow_vertex"));
     id background_vertex = send<id>(library, "newFunctionWithName:", string("water_vertex"));
     id background_fragment = send<id>(library, "newFunctionWithName:", string("water_fragment"));
     id descriptor = apple::make("MTLRenderPipelineDescriptor");
@@ -213,11 +252,40 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     send<void>(attachment, "setPixelFormat:", 80UL);
     send<void>(descriptor, "setDepthAttachmentPixelFormat:", 252UL);
     send<void>(descriptor, "setRasterSampleCount:", static_cast<unsigned long>(samples_));
-    send<void>(descriptor, "setAlphaToCoverageEnabled:", static_cast<BOOL>(YES));
+    send<void>(descriptor, "setAlphaToCoverageEnabled:", static_cast<BOOL>(samples_ > 1));
     pipeline_ =
         send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
     if (pipeline_ == nil)
         error_ = error_text(error);
+    if (conv_fast_) {
+        send<void>(attachment, "setBlendingEnabled:", static_cast<BOOL>(YES));
+        send<void>(attachment, "setSourceRGBBlendFactor:", 4UL);
+        send<void>(attachment, "setDestinationRGBBlendFactor:", 5UL);
+        send<void>(attachment, "setSourceAlphaBlendFactor:", 1UL);
+        send<void>(attachment, "setDestinationAlphaBlendFactor:", 5UL);
+    }
+    if (conv_fast_) {
+        id conv_vertex = send<id>(library, "newFunctionWithName:", string("conv_vertex"));
+        id conv_fragment = send<id>(library, "newFunctionWithName:", string("conv_fragment"));
+        send<void>(descriptor, "setVertexFunction:", conv_vertex);
+        send<void>(descriptor, "setFragmentFunction:", conv_fragment);
+        conv_pipeline_ =
+            send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
+        release(conv_vertex);
+        release(conv_fragment);
+        if (conv_pipeline_ == nil) {
+            error_ = error_text(error);
+            release(descriptor);
+            release(vertex);
+            release(fragment);
+            release(shadow_vertex);
+            release(background_vertex);
+            release(background_fragment);
+            release(library);
+            return false;
+        }
+    }
+    send<void>(attachment, "setBlendingEnabled:", static_cast<BOOL>(NO));
     send<void>(descriptor, "setAlphaToCoverageEnabled:", static_cast<BOOL>(NO));
     send<void>(descriptor, "setVertexFunction:", background_vertex);
     send<void>(descriptor, "setFragmentFunction:", background_fragment);
@@ -250,7 +318,8 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         error_ = error_text(error);
     release(query);
     id retain = send<id>(library, "newFunctionWithName:", string("retain_surface"));
-    send<void>(descriptor, "setVertexFunction:", vertex);
+    id retained_vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_regular_vertex" : "tank_vertex"));
+    send<void>(descriptor, "setVertexFunction:", retained_vertex);
     send<void>(descriptor, "setFragmentFunction:", retain);
     for (unsigned long index = 0; index < visibility_formats.size(); ++index) {
         id color_attachment =
@@ -262,6 +331,7 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     if (visibility_pipeline_ == nil)
         error_ = error_text(error);
     release(retain);
+    release(retained_vertex);
     for (unsigned long index = 1; index < visibility_formats.size(); ++index)
         send<void>(
             send<id>(send<id>(descriptor, "colorAttachments"), "objectAtIndexedSubscript:", index),
@@ -280,10 +350,31 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     release(shadow_vertex);
     release(background_vertex);
     release(background_fragment);
+    if (conv_fast_) {
+        id prepare = send<id>(library, "newFunctionWithName:", string("conv_prepare"));
+        conv_prepare_pipeline_ =
+            send<id>(device_, "newComputePipelineStateWithFunction:error:", prepare, &error);
+        release(prepare);
+        id classify = send<id>(library, "newFunctionWithName:", string("conv_classify"));
+        conv_classify_pipeline_ =
+            send<id>(device_, "newComputePipelineStateWithFunction:error:", classify, &error);
+        release(classify);
+        id prefix = send<id>(library, "newFunctionWithName:", string("conv_prefix"));
+        conv_prefix_pipeline_ = send<id>(device_, "newComputePipelineStateWithFunction:error:", prefix, &error);
+        release(prefix);
+        id compact = send<id>(library, "newFunctionWithName:", string("conv_compact"));
+        conv_compact_pipeline_ = send<id>(device_, "newComputePipelineStateWithFunction:error:", compact, &error);
+        release(compact);
+        if (conv_prepare_pipeline_ == nil || conv_classify_pipeline_ == nil ||
+            conv_prefix_pipeline_ == nil || conv_compact_pipeline_ == nil)
+            error_ = error_text(error);
+    }
     release(library);
     if (pipeline_ == nil || shadow_pipeline_ == nil || background_pipeline_ == nil ||
         visibility_pipeline_ == nil || restore_pipeline_ == nil ||
-        light_visibility_pipeline_ == nil || query_pipeline_ == nil)
+        light_visibility_pipeline_ == nil || query_pipeline_ == nil ||
+        (conv_fast_ && (conv_prepare_pipeline_ == nil || conv_classify_pipeline_ == nil ||
+            conv_prefix_pipeline_ == nil || conv_compact_pipeline_ == nil)))
         return false;
     descriptor = apple::make("MTLDepthStencilDescriptor");
     send<void>(descriptor, "setDepthCompareFunction:", 1UL);
@@ -291,6 +382,9 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     depth_state_ = send<id>(device_, "newDepthStencilStateWithDescriptor:", descriptor);
     send<void>(descriptor, "setDepthCompareFunction:", 7UL);
     restore_depth_state_ = send<id>(device_, "newDepthStencilStateWithDescriptor:", descriptor);
+    send<void>(descriptor, "setDepthCompareFunction:", 3UL);
+    send<void>(descriptor, "setDepthWriteEnabled:", static_cast<BOOL>(NO));
+    conv_depth_state_ = send<id>(device_, "newDepthStencilStateWithDescriptor:", descriptor);
     release(descriptor);
     const unsigned long vertex_bytes = scene.vertices().size() * sizeof(Vertex),
                         index_bytes = scene.indices().size() * sizeof(std::uint32_t),
@@ -302,6 +396,95 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     instances_ = send<id>(device_, "newBufferWithBytes:length:options:",
                           static_cast<const void*>(scene.instances().data()), instance_bytes, 0UL);
     statistics_.static_upload_bytes = vertex_bytes + index_bytes + instance_bytes;
+    if (conv_fast_) {
+        std::uint64_t prepared_count = 0;
+        std::uint32_t list_count = 0, group_count = 0;
+        std::vector<std::uint32_t> adjacency{};
+        struct EdgeOwner { std::uint32_t slot, opposite, count, start; };
+        for (const Batch& batch : scene.batches()) {
+            std::uint32_t first = std::numeric_limits<std::uint32_t>::max(), last = 0;
+            for (std::uint32_t index = 0; index < batch.mesh.index_count; ++index) {
+                const std::uint32_t source_index = scene.indices()[batch.mesh.first_index + index];
+                first = std::min(first, source_index);
+                last = std::max(last, source_index);
+            }
+            const std::uint32_t count = last - first + 1;
+            const std::uint64_t next = prepared_count +
+                                      static_cast<std::uint64_t>(count) * batch.instance_count;
+            if (next > 8000000) {
+                error_ = "CONV prepared geometry exceeds trial storage budget";
+                return false;
+            }
+            const std::uint32_t triangles = batch.mesh.index_count / 3;
+            const std::uint64_t expanded = static_cast<std::uint64_t>(triangles) * batch.instance_count;
+            if (expanded + list_count > 8000000 || adjacency.size() + batch.mesh.index_count > 24000000) {
+                error_ = "CONV boundary topology exceeds trial storage budget";
+                return false;
+            }
+            const std::uint32_t adjacency_offset = static_cast<std::uint32_t>(adjacency.size());
+            adjacency.resize(adjacency.size() + batch.mesh.index_count, UINT32_MAX);
+            std::unordered_map<std::uint64_t, EdgeOwner> edges{};
+            for (std::uint32_t triangle = 0; triangle < triangles; ++triangle) {
+                const std::uint32_t* corners = &scene.indices()[batch.mesh.first_index + triangle * 3];
+                for (std::uint32_t edge = 0; edge < 3; ++edge) {
+                    const std::uint32_t a = corners[edge], b = corners[(edge + 1) % 3];
+                    const std::uint64_t key = (static_cast<std::uint64_t>(std::min(a, b)) << 32) |
+                                               std::max(a, b);
+                    const std::uint32_t slot = adjacency_offset + triangle * 3 + edge;
+                    const std::uint32_t opposite = corners[(edge + 2) % 3];
+                    std::unordered_map<std::uint64_t, EdgeOwner>::iterator found = edges.find(key);
+                    if (found == edges.end())
+                        edges.emplace(key, EdgeOwner{slot, opposite, 1, a});
+                    else {
+                        EdgeOwner& owner = (*found).second;
+                        if (owner.count == 1) {
+                            if (owner.start != a) {
+                                adjacency[slot] = owner.opposite;
+                                adjacency[owner.slot] = opposite;
+                            }
+                            owner.opposite = slot;
+                        } else {
+                            // Nonmanifold topology stays conservative: keep every edge.
+                            adjacency[owner.slot] = UINT32_MAX;
+                            adjacency[owner.opposite] = UINT32_MAX;
+                        }
+                        ++owner.count;
+                    }
+                }
+            }
+            const int material = static_cast<int>(scene.instances()[batch.first_instance].behavior.x);
+            conv_batches_.push_back(ConvBatch{first, count, batch.first_instance,
+                                               static_cast<std::uint32_t>(prepared_count),
+                                               triangles, batch.mesh.first_index, list_count,
+                                               adjacency_offset, batch.instance_count, group_count,
+                                               material == 8 || material == 11 ? 1U : 0U});
+            group_count += (triangles * batch.instance_count + 63) / 64;
+            list_count += static_cast<std::uint32_t>(expanded);
+            prepared_count = next;
+        }
+        conv_prepared_ = send<id>(device_, "newBufferWithLength:options:",
+                                  static_cast<unsigned long>(prepared_count * 40), 32UL);
+        conv_adjacency_ = send<id>(device_, "newBufferWithBytes:length:options:",
+                                   static_cast<const void*>(adjacency.data()),
+                                   static_cast<unsigned long>(adjacency.size() * 4), 0UL);
+        conv_list_ = send<id>(device_, "newBufferWithLength:options:",
+                              static_cast<unsigned long>(list_count) * 8UL, 32UL);
+        conv_arguments_ = send<id>(device_, "newBufferWithLength:options:",
+                                   static_cast<unsigned long>(conv_batches_.size()) * 16UL, 32UL);
+        statistics_.conv_source_triangles = list_count;
+        statistics_.conv_storage_bytes = prepared_count * 40 + adjacency.size() * 4 +
+                                         static_cast<std::uint64_t>(list_count) * 12 +
+                                         group_count * 4 + conv_batches_.size() * 16;
+        conv_masks_ = send<id>(device_, "newBufferWithLength:options:",
+                               static_cast<unsigned long>(list_count) * 4UL, 32UL);
+        conv_counts_ = send<id>(device_, "newBufferWithLength:options:",
+                                static_cast<unsigned long>(group_count) * 4UL, 32UL);
+        if (conv_masks_ == nil || conv_counts_ == nil || conv_prepared_ == nil || conv_adjacency_ == nil || conv_list_ == nil ||
+            conv_arguments_ == nil) {
+            error_ = "Cannot allocate CONV retained boundary resources";
+            return false;
+        }
+    }
     shadow_ = make_texture(252UL, 2048, 2048, 5UL);
     fixed_shadow_ = make_texture(252UL, 2048, 2048, 5UL);
     const std::string root = shader_path.substr(0, shader_path.find_last_of('/')) + "/materials/";
@@ -529,12 +712,12 @@ void Renderer::resize(unsigned int width, unsigned int height) {
         error_ = "Invalid render dimensions";
         return;
     }
-    id replacement = make_texture(252UL, width, height, 4UL, samples_, true);
-    id color = make_texture(80UL, width, height, 4UL, samples_, true);
+    id replacement = make_texture(252UL, width, height, 4UL, samples_, !conv_fast_);
+    id color = samples_ > 1 ? make_texture(80UL, width, height, 4UL, samples_, true) : nil;
     id visibility_depth = retained_ ? make_texture(252UL, width, height, 5UL, samples_) : nil;
     id light_visibility = retained_ ? make_texture(25UL, width, height, 5UL, samples_) : nil;
     std::array<id, 4> visibility{};
-    bool complete = replacement != nil && color != nil &&
+    bool complete = replacement != nil && (samples_ == 1 || color != nil) &&
                     (!retained_ || (visibility_depth != nil && light_visibility != nil));
     for (std::size_t index = 0; retained_ && index < visibility.size(); ++index) {
         visibility[index] = make_texture(visibility_formats[index], width, height, 5UL, samples_);
@@ -571,29 +754,34 @@ void Renderer::resize(unsigned int width, unsigned int height) {
     statistics_.retained_bytes =
         retained_ ? static_cast<std::uint64_t>(width) * height * samples_ * retained_bytes_per_sample
                   : 0;
-    statistics_.memoryless_targets = memoryless_supported_;
+    statistics_.memoryless_targets = memoryless_supported_ && !conv_fast_;
     statistics_.transient_backing_bytes =
-        memoryless_supported_ ? 0 : static_cast<std::uint64_t>(width) * height * samples_ * 8;
+        statistics_.memoryless_targets ? 0
+                              : static_cast<std::uint64_t>(width) * height * samples_ *
+                                    (samples_ > 1 ? 8 : 4);
     send<void>(layer_, "setDrawableSize:", CGSizeMake(width, height));
 }
 void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, const void* uniforms,
-                               unsigned long uniform_size, DrawSet draw_set) {
+                               unsigned long uniform_size, DrawSet draw_set, bool finish) {
     send<void>(encoder, "setRenderPipelineState:", pipeline);
-    send<void>(encoder, "setDepthStencilState:", depth_state_);
+    send<void>(encoder, "setDepthStencilState:",
+               pipeline == conv_pipeline_ ? conv_depth_state_ : depth_state_);
     send<void>(encoder, "setCullMode:", 0UL);
     send<void>(encoder, "setFrontFacingWinding:", 1UL);
     send<void>(encoder, "setVertexBuffer:offset:atIndex:", vertices_, 0UL, 0UL);
     send<void>(encoder, "setVertexBuffer:offset:atIndex:", instances_, 0UL, 1UL);
     send<void>(encoder, "setVertexBuffer:offset:atIndex:", actors_, 0UL, 2UL);
     send<void>(encoder, "setVertexBytes:length:atIndex:", uniforms, uniform_size, 3UL);
-    if (pipeline == pipeline_ || pipeline == visibility_pipeline_) {
+    if (pipeline == pipeline_ || pipeline == visibility_pipeline_ || pipeline == conv_pipeline_) {
         send<void>(encoder, "setFragmentBytes:length:atIndex:", uniforms, uniform_size, 3UL);
         send<void>(encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
         for (std::size_t index = 0; index < materials_.size(); ++index)
             send<void>(encoder, "setFragmentTexture:atIndex:", materials_[index],
                        static_cast<unsigned long>(index + 1));
     }
+    std::size_t batch_index = 0;
     for (const Batch& batch : scene.batches()) {
+        const std::size_t conv_index = batch_index++;
         const Instance& instance = scene.instances()[batch.first_instance];
         const int material = static_cast<int>(instance.behavior.x);
         const bool moving = moving_instance(instance);
@@ -603,7 +791,7 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
         if ((draw_set == DrawSet::retained_surface && !cached) ||
             (draw_set == DrawSet::uncached_surface && cached))
             continue;
-        if (pipeline == pipeline_ || pipeline == visibility_pipeline_) {
+        if (pipeline == pipeline_ || pipeline == visibility_pipeline_ || pipeline == conv_pipeline_) {
             if (moving)
                 ++statistics_.moving_camera_draws;
             else
@@ -613,6 +801,22 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
         // Imported rock shells and fish bodies are closed, outward-wound meshes.
         // Keep foliage, fins and all other materials two-sided.
         send<void>(encoder, "setCullMode:", (material == 8 || material == 11) ? 2UL : 0UL);
+        if (conv_fast_) {
+            const ConvBatch& prepared = conv_batches_[conv_index];
+            send<void>(encoder, "setVertexBuffer:offset:atIndex:", conv_prepared_, 0UL, 5UL);
+            send<void>(encoder, "setVertexBytes:length:atIndex:", static_cast<const void*>(&prepared),
+                       static_cast<unsigned long>(sizeof(prepared)), 6UL);
+        }
+        if (pipeline == conv_pipeline_) {
+            send<void>(encoder, "setCullMode:", 0UL);
+            send<void>(encoder, "setVertexBuffer:offset:atIndex:", indices_,
+                       static_cast<unsigned long>(batch.mesh.first_index * sizeof(std::uint32_t)),
+                       4UL);
+            send<void>(encoder, "setVertexBuffer:offset:atIndex:", conv_list_, 0UL, 7UL);
+            send<void>(encoder, "drawPrimitives:indirectBuffer:indirectBufferOffset:", 4UL,
+                       conv_arguments_, static_cast<unsigned long>(conv_index) * 16UL);
+            continue;
+        }
         send<void>(encoder,
                    "drawIndexedPrimitives:indexCount:indexType:indexBuffer:indexBufferOffset:"
                    "instanceCount:baseVertex:baseInstance:",
@@ -621,7 +825,162 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
                    static_cast<unsigned long>(batch.instance_count), 0L,
                    static_cast<unsigned long>(batch.first_instance));
     }
+    if (finish)
+        send<void>(encoder, "endEncoding");
+}
+bool Renderer::prepare_conv_vertices(id command, const Scene& scene, const void* uniforms,
+                                     unsigned long uniform_size) {
+    if (!visibility_ready_)
+        conv_fixed_ready_ = false;
+    id encoder = send<id>(command, "computeCommandEncoder");
+    if (encoder == nil)
+        return false;
+    send<void>(encoder, "setComputePipelineState:", conv_prepare_pipeline_);
+    send<void>(encoder, "setBuffer:offset:atIndex:", vertices_, 0UL, 0UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", instances_, 0UL, 1UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", actors_, 0UL, 2UL);
+    send<void>(encoder, "setBytes:length:atIndex:", uniforms, uniform_size, 3UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", conv_prepared_, 0UL, 4UL);
+    struct Size { unsigned long width, height, depth; };
+    for (std::size_t index = 0; index < scene.batches().size(); ++index) {
+        const Batch& batch = scene.batches()[index];
+        if (conv_fixed_ready_ && !moving_instance(scene.instances()[batch.first_instance]))
+            continue;
+        const ConvBatch& prepared = conv_batches_[index];
+        if (moving_instance(scene.instances()[batch.first_instance]))
+            ++statistics_.conv_moving_updates;
+        else
+            ++statistics_.conv_static_updates;
+        send<void>(encoder, "setBytes:length:atIndex:", static_cast<const void*>(&prepared),
+                   static_cast<unsigned long>(sizeof(prepared)), 5UL);
+        const unsigned long count = static_cast<unsigned long>(prepared.vertex_count) * batch.instance_count;
+        send<void>(encoder, "dispatchThreads:threadsPerThreadgroup:", Size{count, 1, 1}, Size{64, 1, 1});
+    }
     send<void>(encoder, "endEncoding");
+    id clear = send<id>(command, "blitCommandEncoder");
+    struct Range { unsigned long location, length; };
+    for (std::size_t index = 0; index < scene.batches().size(); ++index) {
+        const Batch& batch = scene.batches()[index];
+        if (conv_fixed_ready_ && !moving_instance(scene.instances()[batch.first_instance]))
+            continue;
+        const ConvBatch& prepared = conv_batches_[index];
+        const unsigned long groups = (static_cast<unsigned long>(prepared.triangle_count) * batch.instance_count + 63) / 64;
+        send<void>(clear, "fillBuffer:range:value:", conv_counts_,
+                   Range{static_cast<unsigned long>(prepared.group_offset) * 4UL, groups * 4UL},
+                   static_cast<unsigned char>(0));
+    }
+    send<void>(clear, "endEncoding");
+    encoder = send<id>(command, "computeCommandEncoder");
+    send<void>(encoder, "setComputePipelineState:", conv_classify_pipeline_);
+    send<void>(encoder, "setBuffer:offset:atIndex:", indices_, 0UL, 0UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", conv_prepared_, 0UL, 1UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", conv_adjacency_, 0UL, 2UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", conv_masks_, 0UL, 3UL);
+    send<void>(encoder, "setBuffer:offset:atIndex:", conv_counts_, 0UL, 7UL);
+    send<void>(encoder, "setBytes:length:atIndex:", uniforms, uniform_size, 6UL);
+    for (std::size_t index = 0; index < scene.batches().size(); ++index) {
+        const Batch& batch = scene.batches()[index];
+        if (conv_fixed_ready_ && !moving_instance(scene.instances()[batch.first_instance]))
+            continue;
+        const ConvBatch& prepared = conv_batches_[index];
+        send<void>(encoder, "setBytes:length:atIndex:", static_cast<const void*>(&prepared),
+                   static_cast<unsigned long>(sizeof(prepared)), 4UL);
+        send<void>(encoder, "setBuffer:offset:atIndex:", conv_arguments_,
+                   static_cast<unsigned long>(index) * 16UL, 5UL);
+        const unsigned long count = static_cast<unsigned long>(prepared.triangle_count) * batch.instance_count;
+        send<void>(encoder, "dispatchThreads:threadsPerThreadgroup:", Size{count, 1, 1}, Size{64, 1, 1});
+    }
+    send<void>(encoder, "endEncoding");
+    for (unsigned int phase = 0; phase < 2; ++phase) {
+        encoder = send<id>(command, "computeCommandEncoder");
+        send<void>(encoder, "setComputePipelineState:", phase == 0 ? conv_prefix_pipeline_ : conv_compact_pipeline_);
+        send<void>(encoder, "setBuffer:offset:atIndex:", conv_counts_, 0UL, 0UL);
+        if (phase == 1) {
+            send<void>(encoder, "setBuffer:offset:atIndex:", conv_masks_, 0UL, 2UL);
+            send<void>(encoder, "setBuffer:offset:atIndex:", conv_list_, 0UL, 3UL);
+        }
+        for (std::size_t index = 0; index < scene.batches().size(); ++index) {
+            const Batch& batch = scene.batches()[index];
+            if (conv_fixed_ready_ && !moving_instance(scene.instances()[batch.first_instance]))
+                continue;
+            const ConvBatch& prepared = conv_batches_[index];
+            send<void>(encoder, "setBytes:length:atIndex:", static_cast<const void*>(&prepared),
+                       static_cast<unsigned long>(sizeof(prepared)), 1UL);
+            const unsigned long groups = (static_cast<unsigned long>(prepared.triangle_count) * batch.instance_count + 63) / 64;
+            if (phase == 0)
+                send<void>(encoder, "setBuffer:offset:atIndex:", conv_arguments_,
+                           static_cast<unsigned long>(index) * 16UL, 2UL);
+            send<void>(encoder, "dispatchThreads:threadsPerThreadgroup:",
+                       Size{phase == 0 ? 1 : groups, 1, 1}, Size{phase == 0 ? 1UL : 64UL, 1, 1});
+        }
+        send<void>(encoder, "endEncoding");
+    }
+    conv_fixed_ready_ = true;
+    return true;
+}
+// Keep commands until they complete: an overloaded GPU may still be executing
+// the previous frame. Dropping that command would bias timings toward fast frames.
+bool Renderer::finish_pending(bool wait) {
+    bool success = true;
+    const bool had_pending = pending_count_ != 0;
+    std::size_t completed = 0;
+    for (; completed < pending_count_; ++completed) {
+        const PendingCommand& pending = pending_[completed];
+        if (wait)
+            send<void>(pending.command, "waitUntilCompleted");
+        const unsigned long status = send<unsigned long>(pending.command, "status");
+        if (status != 4UL && status != 5UL)
+            break;
+        if (status == 5UL) {
+            error_ = error_text(send<id>(pending.command, "error"));
+            visibility_ready_ = false;
+            fixed_shadow_ready_ = false;
+            success = false;
+        } else {
+            const double began = send<double>(pending.command, "GPUStartTime");
+            const double ended = send<double>(pending.command, "GPUEndTime");
+            if (ended > began && began > 0) {
+                statistics_.gpu_seconds += ended - began;
+                ++statistics_.gpu_timed_frames;
+                if (pending.updated_shadows) {
+                    statistics_.gpu_shadow_frame_seconds += ended - began;
+                    ++statistics_.gpu_shadow_frames;
+                } else {
+                    statistics_.gpu_reuse_frame_seconds += ended - began;
+                    ++statistics_.gpu_reuse_frames;
+                }
+            }
+        }
+        release(pending.command);
+    }
+    for (std::size_t index = completed; index < pending_count_; ++index)
+        pending_[index - completed] = pending_[index];
+    const std::size_t remaining = pending_count_ - completed;
+    for (std::size_t index = remaining; index < pending_count_; ++index)
+        pending_[index] = PendingCommand{};
+    pending_count_ = remaining;
+    if (wait && had_pending && conv_fast_ && conv_arguments_ != nil && statistics_.frames != 0) {
+        // Diagnostic readback only when draining, never during ordinary animation.
+        const unsigned long bytes = static_cast<unsigned long>(conv_batches_.size()) * 16UL;
+        id buffer = send<id>(device_, "newBufferWithLength:options:", bytes, 0UL);
+        if (buffer != nil) {
+            id command = send<id>(queue_, "commandBuffer");
+            id blit = send<id>(command, "blitCommandEncoder");
+            send<void>(blit, "copyFromBuffer:sourceOffset:toBuffer:destinationOffset:size:",
+                       conv_arguments_, 0UL, buffer, 0UL, bytes);
+            send<void>(blit, "endEncoding");
+            send<void>(command, "commit");
+            send<void>(command, "waitUntilCompleted");
+            if (send<unsigned long>(command, "status") == 4UL) {
+                const std::uint32_t* counts = static_cast<const std::uint32_t*>(send<void*>(buffer, "contents"));
+                statistics_.conv_boundary_triangles = 0;
+                for (std::size_t index = 0; index < conv_batches_.size(); ++index)
+                    statistics_.conv_boundary_triangles += counts[index * 4 + 1];
+            }
+            release(buffer);
+        }
+    }
+    return success;
 }
 bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
     if (scene.vertices().data() != source_vertices_ || scene.indices().data() != source_indices_ ||
@@ -633,30 +992,11 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         return false;
     const Clock::time_point start = Clock::now();
     apple::Pool pool{};
-    if (previous_command_ != nil && send<unsigned long>(previous_command_, "status") == 5UL) {
-        visibility_ready_ = false;
-        fixed_shadow_ready_ = false;
-        error_ = error_text(send<id>(previous_command_, "error"));
+    if (!finish_pending(false))
         return false;
-    }
-    if (previous_command_ != nil && send<unsigned long>(previous_command_, "status") == 4UL) {
-        const double began = send<double>(previous_command_, "GPUStartTime"),
-                     ended = send<double>(previous_command_, "GPUEndTime");
-        if (ended > began && began > 0) {
-            statistics_.gpu_seconds += ended - began;
-            ++statistics_.gpu_timed_frames;
-            if (previous_updated_shadows_) {
-                statistics_.gpu_shadow_frame_seconds += ended - began;
-                ++statistics_.gpu_shadow_frames;
-            } else {
-                statistics_.gpu_reuse_frame_seconds += ended - began;
-                ++statistics_.gpu_reuse_frames;
-            }
-        }
-    }
-    release(previous_command_);
-    previous_command_ = nil;
-    previous_updated_shadows_ = false;
+    if (pending_count_ == pending_.size() && !finish_pending(true))
+        return false;
+    bool updated_shadows = false;
     id drawable = send<id>(layer_, "nextDrawable");
     if (drawable == nil)
         return false;
@@ -669,6 +1009,8 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         {light_intensity_, 0, 0, 0}};
     id command = send<id>(queue_, "commandBuffer");
     if (!upload_edits(command, scene))
+        return false;
+    if (conv_fast_ && !prepare_conv_vertices(command, scene, &uniforms, sizeof(uniforms)))
         return false;
     id encoder = nil;
     id attachment = nil;
@@ -704,9 +1046,9 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         shadow_time_ = time;
         shadow_revision_ = scene.statistics().revision;
         ++statistics_.dynamic_shadow_frames;
-        previous_updated_shadows_ = true;
+        updated_shadows = true;
     }
-    if (!retained_ && previous_updated_shadows_)
+    if (!retained_ && updated_shadows)
         light_visibility_ready_ = false;
     if (retained_) {
         if (!visibility_ready_) {
@@ -734,7 +1076,7 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         } else
             ++statistics_.visibility_reuses;
     }
-    if (retained_ && (!light_visibility_ready_ || previous_updated_shadows_)) {
+    if (retained_ && (!light_visibility_ready_ || updated_shadows)) {
         id light_pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
         id target =
             send<id>(send<id>(light_pass, "colorAttachments"), "objectAtIndexedSubscript:", 0UL);
@@ -759,10 +1101,11 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
     id pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
     attachment = send<id>(send<id>(pass, "colorAttachments"), "objectAtIndexedSubscript:", 0UL);
     id texture = send<id>(drawable, "texture");
-    send<void>(attachment, "setTexture:", color_);
-    send<void>(attachment, "setResolveTexture:", texture);
+    send<void>(attachment, "setTexture:", samples_ > 1 ? color_ : texture);
+    if (samples_ > 1)
+        send<void>(attachment, "setResolveTexture:", texture);
     send<void>(attachment, "setLoadAction:", 2UL);
-    send<void>(attachment, "setStoreAction:", 2UL);
+    send<void>(attachment, "setStoreAction:", samples_ > 1 ? 2UL : 1UL);
     send<void>(attachment, "setClearColor:", ClearColor{0.0874, 0.209, 0.225, 1});
     attachment = send<id>(pass, "depthAttachment");
     send<void>(attachment, "setTexture:", depth_);
@@ -785,10 +1128,12 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
     }
     send<void>(encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
     encode_geometry(encoder, scene, pipeline_, &uniforms, sizeof(uniforms),
-                    retained_ ? DrawSet::uncached_surface : DrawSet::all);
+                    retained_ ? DrawSet::uncached_surface : DrawSet::all, !conv_fast_);
+    if (conv_fast_)
+        encode_geometry(encoder, scene, conv_pipeline_, &uniforms, sizeof(uniforms));
     send<void>(command, "presentDrawable:", drawable);
     send<void>(command, "commit");
-    previous_command_ = apple::retain(command);
+    pending_[pending_count_++] = PendingCommand{apple::retain(command), updated_shadows};
     ++statistics_.frames;
     statistics_.cpu_submit_seconds += std::chrono::duration<double>(Clock::now() - start).count();
     if (capture_path != nullptr) {

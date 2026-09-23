@@ -14,9 +14,10 @@ A rich, interactive desktop aquarium with very low recurring CPU work.
 - Never claim zero power from zero application CPU. Report app CPU, memory and
   compositor measurements separately. Pause on sleep and explicit suspension.
 - Preserve desktop access. Desktop interactions must not require hidden global
-  input monitoring. The aquarium and control widget must not capture keyboard
+  input monitoring. The aquarium must not capture keyboard
   focus or implement keyboard shortcuts. Every action, including disabling desktop
-  taps and quitting, must remain available through the top control widget.
+  taps and quitting, must remain available through the menu-bar dropdown. Do not
+  add a floating control strip over other applications.
 - No imagegen source objects, textures, background plates or sprites. Sand,
   rocks, plants and animals must be actual programmatically built 3D geometry.
   Any generated reference may guide composition only, never ship as content.
@@ -42,3 +43,15 @@ A rich, interactive desktop aquarium with very low recurring CPU work.
   both `--msaa 2` and `--msaa 4`, and `tools/compare_retained.py` after renderer
   edits. Use `tools/compare_storage.py` against the saved original renderer when
   changing the visibility representation. Preserve object identities and depth.
+
+## CONV coverage trial
+
+- Read `docs/CONV_AA.md` before changing `--aa conv-fast`. Its single-sample
+  boundary overlay is not the sibling's exact four-primitive visibility solver.
+- Preserve deterministic GPU compaction order; alpha composition cannot depend
+  on atomic append scheduling. Never silently truncate boundary candidates.
+- Static prepared vertices/lists invalidate with camera, dimensions or fixed
+  instance edits. Moving vertices update once per frame. Include all GPU cache
+  and topology storage in measurements.
+- Preserve the normal 4× MSAA default until overlap, material opacity and motion
+  quality are accepted. Use opaque RGB PNG capture to match the opaque layer.

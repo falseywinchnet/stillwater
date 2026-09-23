@@ -2,6 +2,17 @@
 // Copyright (c) 2026 Chase Lean, MIT; see licenses/desktop-habitats-MIT.txt.
 #include <metal_stdlib>
 using namespace metal;
+#if SW_SINGLE_SAMPLE
+#define SW_TEXTURE texture2d
+#define SW_DEPTH depth2d
+#define SW_READ(texture, pixel, sample) texture.read(pixel)
+#define SW_SAMPLES(texture) 1u
+#else
+#define SW_TEXTURE texture2d_ms
+#define SW_DEPTH depth2d_ms
+#define SW_READ(texture, pixel, sample) texture.read(pixel, sample)
+#define SW_SAMPLES(texture) texture.get_num_samples()
+#endif
 struct Vertex { float4 position;float4 normal;float4 color;float4 uv;float4 anchor;float4 bend;float4 along;float4 binding; };
 struct Instance { float4x4 transform;float4 color;float4 behavior;float4 anatomy; };
 struct Actor { float4 center;float4 cruise;float4 startled_from;float4 escape;float4 traits; };
@@ -292,21 +303,21 @@ float3 retained_world(uint2 pixel,float distance,float2 correction,
 struct RestoredSurface { float4 color [[color(0)]]; float depth [[depth(any)]]; };
 fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[sample_id]],
  constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
- texture2d_ms<half> base [[texture(1)]],texture2d_ms<half> surface [[texture(2)]],
- texture2d_ms<float> distance_identity [[texture(4)]],texture2d_ms<half> center_correction [[texture(7)]],
- depth2d_ms<float> depth [[texture(5)]],texture2d_ms<half> light_visibility [[texture(6)]]) {
+ SW_TEXTURE<half> base [[texture(1)]],SW_TEXTURE<half> surface [[texture(2)]],
+ SW_TEXTURE<float> distance_identity [[texture(4)]],SW_TEXTURE<half> center_correction [[texture(7)]],
+ SW_DEPTH<float> depth [[texture(5)]],SW_TEXTURE<half> light_visibility [[texture(6)]]) {
     uint2 pixel=uint2(in.position.xy);
-    float z=depth.read(pixel,sample);
+    float z=SW_READ(depth,pixel,sample);
     if(z>=1) {
         float3 color=pow(max(1-exp(-water_color(in.uv)*1.6f),0.0f),float3(1.0f/2.2f));
         return {float4(color,1),1};
     }
-    float4 cached_base=float4(base.read(pixel,sample)),cached_surface=float4(surface.read(pixel,sample));
+    float4 cached_base=float4(SW_READ(base,pixel,sample)),cached_surface=float4(SW_READ(surface,pixel,sample));
     LightingTerms terms={cached_base.rgb,cached_surface.rgb,cached_base.a,cached_surface.a};
-    float distance=distance_identity.read(pixel,sample).r;
-    float2 correction=float2(center_correction.read(pixel,sample).rg);
+    float distance=SW_READ(distance_identity,pixel,sample).r;
+    float2 correction=float2(SW_READ(center_correction,pixel,sample).rg);
     float3 world=retained_world(pixel,distance,correction,u.reconstruction,u.clock.yz);
-    float visible=float(light_visibility.read(pixel,sample).r);
+    float visible=float(SW_READ(light_visibility,pixel,sample).r);
     float3 color=illuminate_fixed(terms,world,u,visible);
     return {float4(color,1),z};
 }
@@ -314,31 +325,31 @@ fragment RestoredSurface restore_surface(WaterOut in [[stage_in]],uint sample [[
 // retained camera surfaces change; animated caustics remain evaluated every frame.
 fragment half retain_light_visibility(WaterOut in [[stage_in]],uint sample [[sample_id]],
  constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
- texture2d_ms<float> distance_identity [[texture(4)]],texture2d_ms<half> center_correction [[texture(7)]],depth2d_ms<float> depth [[texture(5)]]) {
+ SW_TEXTURE<float> distance_identity [[texture(4)]],SW_TEXTURE<half> center_correction [[texture(7)]],SW_DEPTH<float> depth [[texture(5)]]) {
     uint2 pixel=uint2(in.position.xy);
-    if(depth.read(pixel,sample)>=1) return half(1);
-    float distance=distance_identity.read(pixel,sample).r;
-    float2 correction=float2(center_correction.read(pixel,sample).rg);
+    if(SW_READ(depth,pixel,sample)>=1) return half(1);
+    float distance=SW_READ(distance_identity,pixel,sample).r;
+    float2 correction=float2(SW_READ(center_correction,pixel,sample).rg);
     float3 world=retained_world(pixel,distance,correction,u.reconstruction,u.clock.yz);
     float visible=visibility(u.light*float4(world,1),shadow);
     return half(visible);
 }
 struct VisibilityProbe { float4 samples[4]; float4 depths; };
-kernel void query_visibility(texture2d_ms<float> distance_identity [[texture(0)]],
- depth2d_ms<float> depth [[texture(1)]],texture2d_ms<half> center_correction [[texture(2)]],constant uint2& pixel [[buffer(0)]],
+kernel void query_visibility(SW_TEXTURE<float> distance_identity [[texture(0)]],
+ SW_DEPTH<float> depth [[texture(1)]],SW_TEXTURE<half> center_correction [[texture(2)]],constant uint2& pixel [[buffer(0)]],
  device VisibilityProbe& result [[buffer(1)]],constant float4x4& reconstruction [[buffer(2)]],
  constant float4& dimensions [[buffer(3)]]) {
     result.depths=float4(1);
     for(uint index=0;index<4;++index) {
         result.samples[index]=float4(0);
-        if(index<distance_identity.get_num_samples()) {
-            float2 cached=distance_identity.read(pixel,index).rg;
+        if(index<SW_SAMPLES(distance_identity)) {
+            float2 cached=SW_READ(distance_identity,pixel,index).rg;
             if(cached.y!=0) {
-                float2 correction=float2(center_correction.read(pixel,index).rg);
+                float2 correction=float2(SW_READ(center_correction,pixel,index).rg);
                 float3 world=retained_world(pixel,cached.x,correction,reconstruction,dimensions.xy);
                 result.samples[index]=float4(world,cached.y);
             }
-            result.depths[index]=depth.read(pixel,index);
+            result.depths[index]=SW_READ(depth,pixel,index);
         }
     }
 }
@@ -383,10 +394,10 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
     return float4(pow(aces(color),float3(1.0f/2.2f)),alpha);
 }
 
-fragment float4 tank_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
- texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
- texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
- texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
+float4 shade_tank(Out in,constant Uniforms& u,depth2d<float> shadow,
+ texture2d<float> sand,texture2d<float> sand_normal,
+ texture2d<float> rock,texture2d<float> rock_normal,
+ texture2d<float> wood,texture2d<float> wood_normal,bool front) {
     if(in.surface.z>0.5f) return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
     float3 n=normalize(front ? in.normal : -in.normal);
     float3 light=normalize(float3(0,0.9138f,0.4061f));float3 view=normalize(u.eye.xyz-in.world);
@@ -437,4 +448,11 @@ fragment float4 tank_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(
     color=1-exp(-color*1.6f);
     color=pow(max(color,0.0f),float3(1.0f/2.2f));
     return float4(color,1);
+}
+
+fragment float4 tank_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
+ texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
+ texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
+ texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],bool front [[front_facing]]) {
+    return shade_tank(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,front);
 }
