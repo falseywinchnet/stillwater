@@ -22,6 +22,7 @@ struct Out {
     float3 world;float3 normal;float3 local;
     float4 color;float4 behavior;float4 light_position;float4 uv;float4 surface;
     uint identity [[flat]];
+    uint leaf_identity [[flat]];
 };
 float3 water_color(float2 uv) {
     // Dim far water catches a broad overhead glow and falls into darkness below.
@@ -156,7 +157,7 @@ Out prepare(Vertex sample,Instance instance,constant Actor* actors,constant Unif
         world=rotate_y(world*actor.center.w,heading)+actor_position(actor,time);
         n=rotate_y(n,heading);
     }
-    Out out;out.world=world;out.normal=n;out.local=p;out.color=instance.color;out.behavior=instance.behavior;
+    Out out;out.leaf_identity=uint(sample.binding.w);out.world=world;out.normal=n;out.local=p;out.color=instance.color;out.behavior=instance.behavior;
     out.uv=sample.uv;out.surface=float4(sample.normal.w,sample.anchor.w,sample.binding.z,0);
     if(sample.binding.z>0.5f) out.color*=sample.color;
     out.position=u.camera*float4(world,1);out.light_position=u.light*float4(world,1);return out;
@@ -181,6 +182,28 @@ vertex float4 shadow_vertex(uint vertex_id [[vertex_id]],uint instance_id [[inst
     if(int(instances[index].behavior.x+0.5f)==3) return float4(2,2,2,1);
     return out.light_position;
 }
+// The primary shadow stores the closest caster's blade ID. The second depth
+// layer skips every surface belonging to that blade, preserving foreign blockers.
+struct ShadowLeafOut {float4 position [[position]];uint leaf_identity [[flat]];};
+vertex ShadowLeafOut shadow_leaf_vertex(uint vertex_id [[vertex_id]],uint instance_id [[instance_id]],
+ constant Vertex* vertices [[buffer(0)]],constant Instance* instances [[buffer(1)]],
+ constant Actor* actors [[buffer(2)]],constant Uniforms& u [[buffer(3)]]) {
+    Vertex sample=vertices[vertex_id];
+    uint index=sample.binding.y>0.5f ? uint(sample.binding.x) : instance_id;
+    Out surface=prepare(sample,instances[index],actors,u);
+    ShadowLeafOut out;out.position=surface.light_position;out.leaf_identity=uint(sample.binding.w);
+    if(int(instances[index].behavior.x+0.5f)==3)out.position=float4(2,2,2,1);
+    return out;
+}
+fragment ushort shadow_leaf_fragment(ShadowLeafOut in [[stage_in]]) {
+    return ushort(in.leaf_identity);
+}
+fragment void shadow_other_fragment(ShadowLeafOut in [[stage_in]],
+ texture2d<uint> closest_leaf [[texture(0)]]) {
+    uint closest=closest_leaf.read(uint2(in.position.xy)).r;
+    if(closest!=0 && closest==in.leaf_identity)discard_fragment();
+}
+
 float hash(float3 p) { return fract(sin(dot(p,float3(127.1f,311.7f,74.7f)))*43758.5453f); }
 float noise(float3 p) {
     float3 cell=floor(p),f=fract(p);f=f*f*(3-2*f);
@@ -198,6 +221,30 @@ float visibility(float4 clip,depth2d<float> map) {
     for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x) result+=map.sample_compare(sample_state,uv+float2(x,y)*1.5f/2048.0f,p.z-0.0018f);
     return result/9;
 }
+// Preserve the existing nine bilinear PCF taps, selecting the nearest
+// different blade per texel before comparison. A single-ID rejection would
+// incorrectly erase foreign shadows hidden behind the blade's first layer.
+float ribbon_visibility(float4 clip,uint leaf_identity,depth2d<float> map,
+ texture2d<uint> closest_leaf,depth2d<float> other_depth) {
+    if(leaf_identity==0)return visibility(clip,map);
+    float3 p=clip.xyz/clip.w;float2 uv=float2(p.x*.5f+.5f,.5f-p.y*.5f);
+    if(any(uv<0)||any(uv>1)||p.z<0||p.z>1)return 1;
+    constexpr sampler compare_state(coord::normalized,address::clamp_to_edge,filter::linear,compare_func::less_equal);
+    constexpr sampler identity_state(coord::normalized,address::clamp_to_edge,filter::nearest);
+    float2 size=float2(map.get_width(),map.get_height());float result=0;
+    for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x) {
+        float2 tap=uv+float2(x,y)*1.5f/size;
+        float2 fraction=fract(tap*size-0.5f);
+        // Gather order is lower-left, lower-right, upper-right, upper-left.
+        bool4 own=closest_leaf.gather(identity_state,tap)==leaf_identity;
+        float4 primary=map.gather_compare(compare_state,tap,p.z-0.0018f);
+        float4 secondary=other_depth.gather_compare(compare_state,tap,p.z-0.0018f);
+        float4 lit=select(primary,secondary,own);
+        result+=mix(mix(lit.w,lit.z,fraction.x),mix(lit.x,lit.y,fraction.x),fraction.y);
+    }
+    return result/9;
+}
+
 // ACES fit used by Three.js, MIT; licenses/THREE-MIT.txt.
 float3 aces(float3 value) {
     const float3x3 input=float3x3(float3(0.59719f,0.076f,0.0284f),float3(0.35458f,0.90834f,0.13383f),float3(0.04823f,0.01566f,0.83777f));
@@ -507,7 +554,7 @@ kernel void query_visibility(SW_TEXTURE<float> distance_identity [[texture(0)]],
 }
 float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
  texture2d<float> sand,texture2d<float> sand_normal,texture2d<float> rock,texture2d<float> rock_normal,
- texture2d<float> wood,texture2d<float> wood_normal,texture2d<float> leaf_grain,bool front) {
+ texture2d<float> wood,texture2d<float> wood_normal,texture2d<float> leaf_grain,texture2d<uint> shadow_leaf,depth2d<float> shadow_other,bool front) {
     Surface surface=riverscape_surface(in,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,u.illumination.y,front);
     float3 normal=surface.normal,albedo=surface.albedo;
     float alpha=surface.alpha;
@@ -515,7 +562,7 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
     if(material==7 || material==8 || material==9 || material==13 || material==14)
         return float4(illuminate_fixed(fixed_lighting(in,surface,u),in.world,u,visibility(in.light_position,shadow)),1);
     float3 light=normalize(float3(0,0.9138f,0.4061f)),view=normalize(u.eye.xyz-in.world);
-    float direct=max(0.0f,dot(normal,light)),visibility_value=visibility(in.light_position,shadow)*u.illumination.x;
+    float direct=max(0.0f,dot(normal,light)),visibility_value=(u.eye.w>0.5f ? visibility(in.light_position,shadow) : ribbon_visibility(in.light_position,in.leaf_identity,shadow,shadow_leaf,shadow_other))*u.illumination.x;
     float3 hemisphere=mix(float3(0.025f,0.024f,0.020f),float3(0.10f,0.145f,0.12f),normal.y*0.5f+0.5f);
     float3 color=albedo*(hemisphere+float3(1.43f,1.39f,1.28f)*direct*visibility_value);
     color+=albedo*float3(0.06f,0.085f,0.10f)*max(0.0f,dot(normal,normalize(float3(1,5,10))));
@@ -566,8 +613,8 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
 float4 shade_tank(Out in,constant Uniforms& u,depth2d<float> shadow,
  texture2d<float> sand,texture2d<float> sand_normal,
  texture2d<float> rock,texture2d<float> rock_normal,
- texture2d<float> wood,texture2d<float> wood_normal,texture2d<float> leaf_grain,bool front) {
-    if(in.surface.z>0.5f) return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,front);
+ texture2d<float> wood,texture2d<float> wood_normal,texture2d<float> leaf_grain,texture2d<uint> shadow_leaf,depth2d<float> shadow_other,bool front) {
+    if(in.surface.z>0.5f) return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,shadow_leaf,shadow_other,front);
     float3 n=normalize(front ? in.normal : -in.normal);
     float3 light=normalize(float3(0,0.9138f,0.4061f));float3 view=normalize(u.eye.xyz-in.world);
     int material=int(in.behavior.x+0.5f);float3 albedo=in.color.rgb;
@@ -635,8 +682,8 @@ float4 shade_tank(Out in,constant Uniforms& u,depth2d<float> shadow,
 fragment float4 tank_fragment(Out in [[stage_in]],constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
  texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
  texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
- texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]],bool front [[front_facing]]) {
-    return shade_tank(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,front);
+ texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]],texture2d<uint> shadow_leaf [[texture(8)]],depth2d<float> shadow_other [[texture(9)]],bool front [[front_facing]]) {
+    return shade_tank(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,shadow_leaf,shadow_other,front);
 }
 
 // The foliage batch has one known material. Expose that invariant to the shader
@@ -656,7 +703,7 @@ fragment float4 foliage_fragment(Out in [[stage_in]],constant Uniforms& u [[buff
  depth2d<float> shadow [[texture(0)]],texture2d<float> sand [[texture(1)]],
  texture2d<float> sand_normal [[texture(2)]],texture2d<float> rock [[texture(3)]],
  texture2d<float> rock_normal [[texture(4)]],texture2d<float> wood [[texture(5)]],
- texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]],bool front [[front_facing]]) {
+ texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]],texture2d<uint> shadow_leaf [[texture(8)]],depth2d<float> shadow_other [[texture(9)]],bool front [[front_facing]]) {
     in.behavior.x=10;
-    return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,front);
+    return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,shadow_leaf,shadow_other,front);
 }

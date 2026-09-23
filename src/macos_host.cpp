@@ -564,7 +564,8 @@ int run_macos(const Options& options) {
         .compact_camera = options.compact_camera,
         .record_shading = options.record_shading,
         .specialize_foliage = options.specialize_foliage,
-        .leaf_grain = options.leaf_grain};
+        .leaf_grain = options.leaf_grain,
+        .leaf_self_shadows = options.leaf_self_shadows};
     if (!state.renderer.initialize(state.layer, state.scene, shader_path, configuration)) {
         std::cerr << state.renderer.error() << '\n';
         host = nullptr;

@@ -162,6 +162,8 @@ bool save_png(id texture, id queue, unsigned int width, unsigned int height, con
 } // namespace
 Renderer::~Renderer() {
     finish_pending(true);
+    release(shadow_leaf_);release(shadow_other_);
+    release(shadow_leaf_pipeline_);release(shadow_other_pipeline_);
     for (const id material : materials_)
         release(material);
     for (const id texture : visibility_)
@@ -242,6 +244,7 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     record_shading_ = configuration.record_shading && compact_camera_;
     specialize_foliage_ = configuration.specialize_foliage && !conv_fast_;
     leaf_grain_ = configuration.leaf_grain;
+    leaf_self_shadows_ = configuration.leaf_self_shadows;
     if (conv_fast_)
         samples_ = 1;
     source_vertices_ = scene.vertices().data();
@@ -451,6 +454,18 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
         send<id>(device_, "newRenderPipelineStateWithDescriptor:error:", descriptor, &error);
     if (shadow_pipeline_ == nil)
         error_ = error_text(error);
+    id leaf_vertex=send<id>(library,"newFunctionWithName:",string("shadow_leaf_vertex"));
+    id leaf_fragment=send<id>(library,"newFunctionWithName:",string("shadow_leaf_fragment"));
+    id other_fragment=send<id>(library,"newFunctionWithName:",string("shadow_other_fragment"));
+    send<void>(descriptor,"setVertexFunction:",leaf_vertex);
+    send<void>(descriptor,"setFragmentFunction:",leaf_fragment);
+    send<void>(attachment,"setPixelFormat:",23UL);
+    shadow_leaf_pipeline_=send<id>(device_,"newRenderPipelineStateWithDescriptor:error:",descriptor,&error);
+    send<void>(attachment,"setPixelFormat:",0UL);
+    send<void>(descriptor,"setFragmentFunction:",other_fragment);
+    shadow_other_pipeline_=send<id>(device_,"newRenderPipelineStateWithDescriptor:error:",descriptor,&error);
+    release(leaf_vertex);release(leaf_fragment);release(other_fragment);
+    if(shadow_leaf_pipeline_==nil || shadow_other_pipeline_==nil)error_=error_text(error);
     release(descriptor);
     release(vertex);
     release(fragment);
@@ -595,6 +610,8 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     }
     shadow_ = make_texture(252UL, 2048, 2048, 5UL);
     fixed_shadow_ = make_texture(252UL, 2048, 2048, 5UL);
+    shadow_leaf_ = make_texture(23UL,2048,2048,5UL);
+    shadow_other_ = make_texture(252UL,2048,2048,5UL);
     const std::string root = shader_path.substr(0, shader_path.find_last_of('/')) + "/materials/";
     const std::array<const char*, 6> names{
         "sand_01_diff.jpg",          "sand_01_nor_gl.jpg",
@@ -622,12 +639,15 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
     for (const id material : materials_)
         statistics_.material_storage_bytes += send<unsigned long>(material, "allocatedSize");
     statistics_.shadow_storage_bytes = send<unsigned long>(shadow_, "allocatedSize") +
-                                       send<unsigned long>(fixed_shadow_, "allocatedSize");
+                                       send<unsigned long>(fixed_shadow_, "allocatedSize") +
+                                       send<unsigned long>(shadow_leaf_,"allocatedSize") +
+                                       send<unsigned long>(shadow_other_,"allocatedSize");
     statistics_.geometry_storage_bytes = vertex_bytes + index_bytes + instance_bytes +
                                          scene.actors().size() * sizeof(Actor);
     upload_actors(scene);
     if (vertices_ == nil || indices_ == nil || instances_ == nil || actors_ == nil ||
-        shadow_ == nil || fixed_shadow_ == nil) {
+        shadow_ == nil || fixed_shadow_ == nil || shadow_leaf_ == nil || shadow_other_ == nil ||
+        shadow_leaf_pipeline_ == nil || shadow_other_pipeline_ == nil) {
         error_ = "GPU resource allocation failed";
         return false;
     }
@@ -922,16 +942,21 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
     if (pipeline == pipeline_ || pipeline == visibility_pipeline_ || pipeline == conv_pipeline_) {
         send<void>(encoder, "setFragmentBytes:length:atIndex:", uniforms, uniform_size, 3UL);
         send<void>(encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
+        send<void>(encoder, "setFragmentTexture:atIndex:", shadow_leaf_, 8UL);
+        send<void>(encoder, "setFragmentTexture:atIndex:", shadow_other_, 9UL);
         for (std::size_t index = 0; index < materials_.size(); ++index)
             send<void>(encoder, "setFragmentTexture:atIndex:", materials_[index],
                        static_cast<unsigned long>(index + 1));
     }
+    if (pipeline == shadow_other_pipeline_)
+        send<void>(encoder,"setFragmentTexture:atIndex:",shadow_leaf_,0UL);
+    const bool shadow_pass=pipeline==shadow_pipeline_ || pipeline==shadow_leaf_pipeline_ || pipeline==shadow_other_pipeline_;
     std::size_t batch_index = 0;
     for (const Batch& batch : scene.batches()) {
         const std::size_t conv_index = batch_index++;
         const Instance& instance = scene.instances()[batch.first_instance];
         const int material = static_cast<int>(instance.behavior.x);
-        if (pipeline == shadow_pipeline_ && material == 15)
+        if (shadow_pass && material == 15)
             continue;
         const bool moving = moving_instance(instance);
         if ((draw_set == DrawSet::fixed && moving) || (draw_set == DrawSet::moving && !moving))
@@ -1287,7 +1312,7 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         light_matrix(),
         reconstruction_,
         {static_cast<float>(time), static_cast<float>(width_), static_cast<float>(height_), 0},
-        eye_,
+        {eye_.x,eye_.y,eye_.z,leaf_self_shadows_ ? 1.0F : 0.0F},
         {light_intensity_, leaf_grain_ ? 1.0F : 0.0F, 0, 0}};
     id command = send<id>(queue_, "commandBuffer");
     if (!upload_edits(command, scene))
@@ -1316,15 +1341,25 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
         shadow_revision_ != scene.statistics().revision) {
         id blit = send<id>(command, "blitCommandEncoder");
         send<void>(blit, "copyFromTexture:toTexture:", fixed_shadow_, shadow_);
+        send<void>(blit, "copyFromTexture:toTexture:", fixed_shadow_, shadow_other_);
         send<void>(blit, "endEncoding");
         id shadow_pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
         attachment = send<id>(shadow_pass, "depthAttachment");
         send<void>(attachment, "setTexture:", shadow_);
         send<void>(attachment, "setLoadAction:", 1UL);
         send<void>(attachment, "setStoreAction:", 1UL);
+        id identity_attachment=send<id>(send<id>(shadow_pass,"colorAttachments"),"objectAtIndexedSubscript:",0UL);
+        send<void>(identity_attachment,"setTexture:",shadow_leaf_);
+        send<void>(identity_attachment,"setLoadAction:",2UL);
+        send<void>(identity_attachment,"setStoreAction:",1UL);
+        send<void>(identity_attachment,"setClearColor:",ClearColor{0,0,0,0});
         encoder = send<id>(command, "renderCommandEncoderWithDescriptor:", shadow_pass);
-        encode_geometry(encoder, scene, shadow_pipeline_, &uniforms, sizeof(uniforms),
-                        DrawSet::moving);
+        encode_geometry(encoder, scene, shadow_leaf_pipeline_, &uniforms, sizeof(uniforms),DrawSet::moving);
+        // Retain the nearest different blade, including the fixed geometry copied above.
+        send<void>(identity_attachment,"setTexture:",static_cast<id>(nil));
+        send<void>(attachment,"setTexture:",shadow_other_);
+        encoder=send<id>(command,"renderCommandEncoderWithDescriptor:",shadow_pass);
+        encode_geometry(encoder,scene,shadow_other_pipeline_,&uniforms,sizeof(uniforms),DrawSet::moving);
         shadow_time_ = time;
         shadow_revision_ = scene.statistics().revision;
         ++statistics_.dynamic_shadow_frames;

@@ -2,6 +2,7 @@
 #include "stillwater/sound.hpp"
 #include "stillwater/timing.hpp"
 #include "stillwater/leaf_texture.hpp"
+#include "stillwater/leaf_shadow.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -315,11 +316,39 @@ void sound_contract() {
     require(left.stereo.front() == 0 && left.stereo[left.stereo.size() - 2] == 0,
             "tap endpoints are silent");
 }
+void ribbon_identity_contract() {
+    std::vector<stillwater::Vertex> vertices(9);
+    std::vector<stillwater::Instance> instances(1);
+    instances[0].behavior.x=10;
+    for (stillwater::Vertex& vertex : vertices) {
+        vertex.binding={0,1,1,0};vertex.anchor.w=0.75F;
+    }
+    const std::vector<std::uint32_t> indices{0,1,2,2,1,3,4,5,6};
+    vertices[7].anchor.w=0.3F;vertices[8].binding.y=0;
+    std::string error;
+    require(stillwater::assign_ribbon_shadow_ids(vertices,indices,instances,error), "ribbon labels assigned");
+    require(vertices[0].binding.w>0 && vertices[0].binding.w==vertices[3].binding.w,
+            "connected triangles share blade identity");
+    require(vertices[0].binding.w!=vertices[4].binding.w && vertices[4].binding.w>0,
+            "disconnected blades in one plant retain separate identities");
+    require(vertices[7].binding.w==0 && vertices[8].binding.w==0,
+            "broad leaves and unbound geometry keep ordinary self shadows");
+    const float first=vertices[0].binding.w;
+    const std::vector<std::uint32_t> invalid{0,1,99};
+    require(!stillwater::assign_ribbon_shadow_ids(vertices,invalid,instances,error) &&
+            vertices[0].binding.w==first,"invalid topology leaves metadata unchanged");
+    require(stillwater::assign_ribbon_shadow_ids(vertices,indices,instances,error) &&
+            vertices[0].binding.w==first,"ribbon identities reproduce deterministically");
+    std::vector<stillwater::Vertex> overflow(65536,vertices[0]);
+    require(!stillwater::assign_ribbon_shadow_ids(overflow,{},instances,error),
+            "R16 identity overflow is rejected rather than aliasing blades");
+}
 } // namespace
 int main() {
     static_assert(sizeof(stillwater::Vertex) == 128);
     static_assert(sizeof(stillwater::Instance) == 112);
     static_assert(sizeof(stillwater::Actor) == 80);
+    ribbon_identity_contract();
     leaf_grain_contract();
     scene_contract();
     pointer_contract();

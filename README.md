@@ -171,3 +171,9 @@ keep the aquarium visible, and report hardware, dimensions, sample count and
 frame cap with the raw JSON. Historical receipts include local paths for
 provenance; these paths are not build dependencies. Generated build directories,
 app bundles and temporary experiment captures are excluded from Git.
+
+Thin ribbon leaves now omit self-shadowing within each individual blade; other
+leaves and objects still cast shadows onto them. This suppresses the broad moving
+bands without changing leaf motion. `--leaf-self-shadows` restores the previous
+policy for diagnosis. See [the shadow investigation](experiments/leaf-shadow/README.md)
+for the rendering approximation, validation and Neo cost measurements.

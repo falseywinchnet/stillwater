@@ -28,7 +28,7 @@ struct Vertex {
     Float4 anchor{};
     Float4 bend{};
     Float4 along{};
-    Float4 binding{}; // index, uses per-vertex object, imported geometry, reserved
+    Float4 binding{}; // index, uses per-vertex object, imported geometry, ribbon shadow identity
 };
 struct Ray {
     Vec3 origin{};

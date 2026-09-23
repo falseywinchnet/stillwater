@@ -33,6 +33,7 @@ struct RendererConfiguration {
     bool record_shading{};
     bool specialize_foliage{true};
     bool leaf_grain{true};
+    bool leaf_self_shadows{};
 };
 struct VisibilityProbe {
     std::array<Float4, 4> samples{};
@@ -111,6 +112,9 @@ class Renderer final {
     bool record_shading_{};
     bool specialize_foliage_{};
     bool leaf_grain_{true};
+    bool leaf_self_shadows_{};
+    id shadow_leaf_{nil}, shadow_other_{nil};
+    id shadow_leaf_pipeline_{nil}, shadow_other_pipeline_{nil};
     id foliage_pipeline_{nil};
     id record_shade_pipeline_{nil}, record_color_{nil}, record_light_{nil};
     bool validate_camera_{};

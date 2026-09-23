@@ -13,6 +13,7 @@ struct Options {
     bool record_shading{};
     bool specialize_foliage{true};
     bool leaf_grain{true};
+    bool leaf_self_shadows{};
     double capture_time{};
     std::string verify_retained{};
     unsigned int fps{24};

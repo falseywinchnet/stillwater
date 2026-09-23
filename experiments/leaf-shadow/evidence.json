@@ -1,0 +1,108 @@
+{
+  "base_commit": "21e358b",
+  "date": "2026-09-23",
+  "renderer": "paired-view experimental app, 4x MSAA per projection, full redraw",
+  "capture_size": [
+    1408,
+    881
+  ],
+  "capture_time": 14,
+  "target": {
+    "plant_identity": 7044,
+    "blade_in_clump": 2,
+    "blade_vertex_range_half_open": [
+      192092,
+      192155
+    ],
+    "blades_in_clump": 10,
+    "triangles_in_blade": 80,
+    "band_roi": [
+      96,
+      300,
+      114,
+      355
+    ]
+  },
+  "interpretation": "Disabling only the visible blade as a caster removes the identified bands; keeping it as the only caster within its clump preserves them. Fully refreshed paused captures contain the bands, so refresh cadence is not required for this defect. Removing texture grain, veins, or normal deformation does not remove them.",
+  "ablation_error_vs_clump_not_casting": {
+    "normal": 4.552525252525252,
+    "no-grain": 4.610774410774411,
+    "no-veins": 4.947474747474748,
+    "flat-normals": 4.711784511784511,
+    "no-shadows": 0.4734006734006734,
+    "no-self7044": 0.0,
+    "without-blade2": 0.05858585858585859,
+    "only-blade2": 4.491245791245791,
+    "receiver-plane": 2.7865319865319864,
+    "plane-footprint": 1.3060606060606061,
+    "plane-exact": 2.684848484848485,
+    "soft-leaf": 4.935016835016835,
+    "ribbon-bend": 12.233333333333333
+  },
+  "captures": {
+    "normal": {
+      "path": "artifacts/leaf-motion/normal-14.png",
+      "sha256": "91ff532db44dbd23f931b710630be31ab764faba6584b0189cdee652e965af4f"
+    },
+    "no-grain": {
+      "path": "artifacts/leaf-motion/no-grain-14.png",
+      "sha256": "cb328f9ea0b6e90314af6df0e1f240be1f4d9f7ed86bc0f2d2c74c9bc46b2686"
+    },
+    "no-veins": {
+      "path": "artifacts/leaf-motion/no-veins-14.png",
+      "sha256": "667ae8b5d14a463a353fa8b00e4f1ebe3752b96b88f3c83f016f2f1d6c3a0768"
+    },
+    "flat-normals": {
+      "path": "artifacts/leaf-motion/flat-normals-14.png",
+      "sha256": "a35e2cf1e793d6b774c25b5a2c4ed1a8f383dc56d1accbb579f92429c59a3641"
+    },
+    "no-shadows": {
+      "path": "artifacts/leaf-motion/no-shadows-14.png",
+      "sha256": "681329eeba4daa976819a80ec73f21d02c56422f0cdde49a7fefe862354b6d5e"
+    },
+    "no-self7044": {
+      "path": "artifacts/leaf-motion/no-self7044-14.png",
+      "sha256": "000bad1c4763ce831b3119dff06f3e064b17dc55732844d92114a5340492f09d"
+    },
+    "without-blade2": {
+      "path": "artifacts/leaf-motion/without-blade2-14.png",
+      "sha256": "f136376055dad197534f55847dc49360806cd0f0a6511d9efb672d528425d1b9"
+    },
+    "only-blade2": {
+      "path": "artifacts/leaf-motion/only-blade2-14.png",
+      "sha256": "4e547cf0d769740fec9a8477bea28367dee6482abe618756ebb910df55be172d"
+    },
+    "receiver-plane": {
+      "path": "artifacts/leaf-motion/receiver-plane-14.png",
+      "sha256": "40bf21524fc24bb09668ff4f085953c7bcf0d11e330270563d44738c1805632f"
+    },
+    "plane-footprint": {
+      "path": "artifacts/leaf-motion/plane-footprint-14.png",
+      "sha256": "0a36aecccfc566bd563d8ffd977b3ab5adb5ae85b209b2a10783726d2424d21d"
+    },
+    "plane-exact": {
+      "path": "artifacts/leaf-motion/plane-exact-14.png",
+      "sha256": "4683a804b1c14ec8f8b4d0c3f390155ae800ee576e52655dca9fcd16a0f7d042"
+    },
+    "soft-leaf": {
+      "path": "artifacts/leaf-motion/soft-leaf-14.png",
+      "sha256": "411f203f2f27f5c6d5aa4e1698c11273724bd302f59a57194b574af002eea7a8"
+    },
+    "ribbon-bend": {
+      "path": "artifacts/leaf-motion/ribbon-bend-14.png",
+      "sha256": "39eb50716c35def5fa5e94b4380edee7a79a3304fd084b27599b33a802cd8098"
+    }
+  },
+  "shader_trials_promoted": false,
+  "cpu_ray_diagnostic": {
+    "triangles": 80,
+    "seed": 0.51171875,
+    "sampled_camera_hits": 951,
+    "self_occluded_by_exact_triangle_ray": 216,
+    "blocker_distance_range": [
+      0.056296703777280535,
+      1.1907921069228469
+    ],
+    "note": "CPU diagnostic using shader-equivalent deformation with float32 seed; not GPU readback or general image certificate"
+  }
+}

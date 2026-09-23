@@ -83,7 +83,7 @@ kernel void conv_prepare(uint index [[thread_position_in_grid]],
     prepared[batch.prepared_offset+index]={packed_float4(out.position),packed_float3(out.normal),packed_float3(out.local)};
 }
 Out conv_load(Vertex sample,Instance instance,ConvPrepared prepared,constant Uniforms& u) {
-    Out out;out.position=float4(prepared.clip);out.normal=float3(prepared.normal);out.local=float3(prepared.local);
+    Out out;out.leaf_identity=uint(sample.binding.w);out.position=float4(prepared.clip);out.normal=float3(prepared.normal);out.local=float3(prepared.local);
     float4 world=u.reconstruction*float4(out.position.xy,-out.position.w,1);
     out.world=world.xyz/world.w;out.color=instance.color;
     if(sample.binding.z>.5f)out.color*=sample.color;
@@ -113,6 +113,7 @@ vertex float4 conv_shadow_vertex(uint vertex_id [[vertex_id]],uint instance_id [
     Out out=conv_source(vertex_id,instance_id,vertices,instances,prepared,batch,u);return out.light_position;
 }
 struct ConvOut {
+    uint leaf_identity [[flat]];
     float4 position [[position]];
     float3 world; float3 normal; float3 local;
     float4 color; float4 behavior; float4 light_position; float4 uv; float4 surface;
@@ -148,6 +149,7 @@ vertex ConvOut conv_vertex(uint vertex_id [[vertex_id]], uint instance_id [[inst
        ((material==8 || material==11) && !front))return out;
     bool swapped=area<0;
     if(swapped) { float2 tmp=p[1];p[1]=p[2];p[2]=tmp;Out swap=v[1];v[1]=v[2];v[2]=swap;area=-area; }
+    out.leaf_identity=v[0].leaf_identity;
     out.mask=candidate.triangle_mask>>29;
     if(swapped)out.mask=((out.mask&1u)<<2)|(out.mask&2u)|((out.mask&4u)>>2);
     out.origin=p[0];out.e1=p[1]-p[0];out.e2=p[2]-p[0];out.twiceArea=area;out.front=front;
@@ -182,7 +184,7 @@ vertex ConvOut conv_vertex(uint vertex_id [[vertex_id]], uint instance_id [[inst
 fragment float4 conv_fragment(ConvOut in [[stage_in]],constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
  texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
  texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
- texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]]) {
+ texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]],texture2d<uint> shadow_leaf [[texture(8)]],depth2d<float> shadow_other [[texture(9)]]) {
     if(in.twiceArea<=0)discard_fragment();
     float2 q=in.position.xy-in.origin;
     float2 edges[3]={in.e1,in.e2-in.e1,-in.e2};
@@ -202,10 +204,10 @@ fragment float4 conv_fragment(ConvOut in [[stage_in]],constant Uniforms& u [[buf
         for(int i=0;i<4;i++)area+=segmentTriangle(box[i],box[(i+1)%4],v);
     }
     if(area<=0)discard_fragment();
-    Out surface;surface.position=in.position;surface.world=in.world;surface.normal=in.normal;
+    Out surface;surface.leaf_identity=in.leaf_identity;surface.position=in.position;surface.world=in.world;surface.normal=in.normal;
     surface.local=in.local;surface.color=in.color;surface.behavior=in.behavior;
     surface.light_position=in.light_position;surface.uv=in.uv;surface.surface=in.surface;surface.identity=0;
-    float4 color=shade_tank(surface,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,in.front!=0);
+    float4 color=shade_tank(surface,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,shadow_leaf,shadow_other,in.front!=0);
     color.a*=saturate(area);
     return color;
 }

@@ -1,4 +1,5 @@
 #include "stillwater/scene.hpp"
+#include "stillwater/leaf_shadow.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -131,6 +132,8 @@ bool Scene::load_habitat(const std::string& path, std::string& error) {
                            entry.radius,
                            entry.actor});
     }
+    if (!assign_ribbon_shadow_ids(vertices, indices, instances, error))
+        return false;
     // The original translation enlarged every fish and flattened its depth range.
     // Restore upstream's 0.83..1.08 body scale, distributed across the water column.
     for (std::size_t index = 0; index < actors.size(); ++index) {
