@@ -1,0 +1,320 @@
+diff --git a/assets/conv_geometry.metal b/assets/conv_geometry.metal
+index 788e3ed..2061536 100644
+--- a/assets/conv_geometry.metal
++++ b/assets/conv_geometry.metal
+@@ -13,24 +13,40 @@ struct ConvArguments { atomic_uint vertex_count; uint instance_count,vertex_star
+ float2 conv_screen(float4 clip,float2 dimensions) {
+     return (clip.xy/clip.w*float2(.5f,-.5f)+.5f)*dimensions;
+ }
++#if SW_INTEGRATE
++struct IntegrationGeometry {float4 edge01,edge2depth,tail;};
++#endif
+ kernel void conv_classify(uint index [[thread_position_in_grid]],
+     const device uint* indices [[buffer(0)]],const device ConvPrepared* prepared [[buffer(1)]],
+     const device uint* adjacency [[buffer(2)]],device uint* masks [[buffer(3)]],
+     constant ConvBatch& batch [[buffer(4)]],device ConvArguments& arguments [[buffer(5)]],
+-    constant Uniforms& u [[buffer(6)]],device atomic_uint* counts [[buffer(7)]]) {
++    constant Uniforms& u [[buffer(6)]],device atomic_uint* counts [[buffer(7)]]
++#if SW_INTEGRATE
++    ,device IntegrationGeometry* geometry [[buffer(8)]],const device Vertex* vertices [[buffer(9)]]
++#endif
++    ) {
+     masks[batch.list_offset+index]=0;
+     uint triangle=index%batch.triangle_count,instance=index/batch.triangle_count;
+     uint offset=batch.prepared_offset+instance*batch.vertex_count;
+-    float2 p[3];
++    float2 p[3];float depth[3];
+     for(uint i=0;i<3;++i) {
+         float4 clip=float4(prepared[offset+indices[batch.first_index+triangle*3+i]-batch.first_vertex].clip);
+         if(clip.w<=0 || clip.z<0)return;
+-        p[i]=conv_screen(clip,u.clock.yz);
++        p[i]=conv_screen(clip,u.clock.yz);depth[i]=clip.z/clip.w;
+     }
+     float area=cross2(p[1]-p[0],p[2]-p[0]);
+     if(abs(area)<1e-7f || (batch.cull_back!=0 && area>=0))return;
+     float2 lo=min(p[0],min(p[1],p[2]))-.5f,hi=max(p[0],max(p[1],p[2]))+.5f;
+     if(any(hi<0) || any(lo>u.clock.yz))return;
++#if SW_INTEGRATE
++    if(area<0) {float2 point=p[1];p[1]=p[2];p[2]=point;float z=depth[1];depth[1]=depth[2];depth[2]=z;area=-area;}
++    Vertex source=vertices[indices[batch.first_index+triangle*3]];
++    uint identity=source.binding.y>0.5f ? uint(source.binding.x)+1 : batch.first_instance+instance+1;
++    geometry[batch.list_offset+index]={float4(p[0],p[1]-p[0]),float4(p[2]-p[0],depth[0],depth[1]),float4(depth[2],area,as_type<float>(identity),0)};
++    masks[batch.list_offset+index]=7;
++    atomic_fetch_add_explicit(&counts[batch.group_offset+index/64],1u,memory_order_relaxed);
++    return;
++#endif
+     uint mask=0;
+     for(uint edge=0;edge<3;++edge) {
+         uint other=adjacency[batch.adjacency_offset+triangle*3+edge];
+@@ -117,6 +133,7 @@ struct ConvOut {
+     float3 world; float3 normal; float3 local;
+     float4 color; float4 behavior; float4 light_position; float4 uv; float4 surface;
+     float2 origin [[flat]]; float2 e1 [[flat]]; float2 e2 [[flat]];
++    float3 source_depth [[flat]]; uint identity [[flat]]; uint order [[flat]];
+     float3 radii [[flat]]; float twiceArea [[flat]]; uint front [[flat]]; uint mask [[flat]];
+ };
+ vertex ConvOut conv_vertex(uint vertex_id [[vertex_id]], uint instance_id [[instance_id]],
+@@ -150,6 +167,9 @@ vertex ConvOut conv_vertex(uint vertex_id [[vertex_id]], uint instance_id [[inst
+     if(swapped) { float2 tmp=p[1];p[1]=p[2];p[2]=tmp;Out swap=v[1];v[1]=v[2];v[2]=swap;area=-area; }
+     out.mask=candidate.triangle_mask>>29;
+     if(swapped)out.mask=((out.mask&1u)<<2)|(out.mask&2u)|((out.mask&4u)>>2);
++    out.identity=vertices[indices[triangle*3]].binding.y>0.5f ? uint(vertices[indices[triangle*3]].binding.x)+1 : instance_id+1;
++    out.order=batch.list_offset+(instance_id-batch.first_instance)*batch.triangle_count+triangle;
++    out.source_depth=float3(v[0].position.z/v[0].position.w,v[1].position.z/v[1].position.w,v[2].position.z/v[2].position.w);
+     out.origin=p[0];out.e1=p[1]-p[0];out.e2=p[2]-p[0];out.twiceArea=area;out.front=front;
+     float2 e3=out.e2-out.e1;
+     out.radii=.5f*float3(abs(out.e1.x)+abs(out.e1.y),abs(e3.x)+abs(e3.y),abs(out.e2.x)+abs(out.e2.y));
+@@ -182,7 +202,7 @@ vertex ConvOut conv_vertex(uint vertex_id [[vertex_id]], uint instance_id [[inst
+ fragment float4 conv_fragment(ConvOut in [[stage_in]],constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
+  texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
+  texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
+- texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]]) {
++ texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]]) {
+     if(in.twiceArea<=0)discard_fragment();
+     float2 q=in.position.xy-in.origin;
+     float2 edges[3]={in.e1,in.e2-in.e1,-in.e2};
+@@ -205,7 +225,7 @@ fragment float4 conv_fragment(ConvOut in [[stage_in]],constant Uniforms& u [[buf
+     Out surface;surface.position=in.position;surface.world=in.world;surface.normal=in.normal;
+     surface.local=in.local;surface.color=in.color;surface.behavior=in.behavior;
+     surface.light_position=in.light_position;surface.uv=in.uv;surface.surface=in.surface;surface.identity=0;
+-    float4 color=shade_tank(surface,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,in.front!=0);
++    float4 color=shade_tank(surface,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,in.front!=0);
+     color.a*=saturate(area);
+     return color;
+ }
+diff --git a/src/macos_host.cpp b/src/macos_host.cpp
+index 2c2e8a5..3124301 100644
+--- a/src/macos_host.cpp
++++ b/src/macos_host.cpp
+@@ -564,7 +564,8 @@ int run_macos(const Options& options) {
+         .compact_camera = options.compact_camera,
+         .record_shading = options.record_shading,
+         .specialize_foliage = options.specialize_foliage,
+-        .leaf_grain = options.leaf_grain};
++        .leaf_grain = options.leaf_grain,
++        .integrate = options.integrate};
+     if (!state.renderer.initialize(state.layer, state.scene, shader_path, configuration)) {
+         std::cerr << state.renderer.error() << '\n';
+         host = nullptr;
+diff --git a/src/macos_host.hpp b/src/macos_host.hpp
+index eb5902c..3cd181a 100644
+--- a/src/macos_host.hpp
++++ b/src/macos_host.hpp
+@@ -13,6 +13,7 @@ struct Options {
+     bool record_shading{};
+     bool specialize_foliage{true};
+     bool leaf_grain{true};
++    bool integrate{};
+     double capture_time{};
+     std::string verify_retained{};
+     unsigned int fps{24};
+diff --git a/src/main.cpp b/src/main.cpp
+index ead89f8..fc67192 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -49,7 +49,13 @@ int main(int argc, char** argv) {
+             options.compact_camera = true;
+         else if (std::strcmp(argument, "--aa") == 0 && index + 1 < argc) {
+             const char* mode = argv[++index];
+-            if (std::strcmp(mode, "conv-fast") == 0) {
++            options.integrate = false;
++            if (std::strcmp(mode, "integrate") == 0) {
++                options.integrate = true;
++                options.conv_fast = true;
++                options.retained = false;
++                options.samples = 1;
++            } else if (std::strcmp(mode, "conv-fast") == 0) {
+                 options.conv_fast = true;
+                 options.samples = 1;
+             } else if (std::strcmp(mode, "point") == 0) {
+@@ -97,7 +103,7 @@ int main(int argc, char** argv) {
+         } else {
+             std::cout << "Stillwater [--desktop|--preview] [--muted] [--paused] [--fps 1..60]\n  "
+                          "[--capture file.png] [--metrics file.json] [--quit-after seconds]\n  "
+-                         "[--msaa 2|4] [--aa msaa|point|conv-fast] [--render-scale 0.5..1]\n  "
++                         "[--msaa 2|4] [--aa msaa|point|conv-fast|integrate] [--render-scale 0.5..1]\n  "
+                          "[--record-shading] [--specialize-foliage|--generic-foliage] [--no-leaf-grain] [--compact-camera|--dense-camera] [--full-redraw] [--verify-retained directory] [--capture-time seconds]\n  "
+                          "[--export-tap file.wav] [--export-ambience file.wav]\n";
+             return std::strcmp(argument, "--help") == 0 ? 0 : 2;
+diff --git a/src/metal_renderer.cpp b/src/metal_renderer.cpp
+index 9c3bf3b..5ee2593 100644
+--- a/src/metal_renderer.cpp
++++ b/src/metal_renderer.cpp
+@@ -162,6 +162,7 @@ bool save_png(id texture, id queue, unsigned int width, unsigned int height, con
+ } // namespace
+ Renderer::~Renderer() {
+     finish_pending(true);
++    release(integration_heads_);release(integration_records_);release(integration_count_);release(integration_geometry_);release(integration_pipeline_);
+     for (const id material : materials_)
+         release(material);
+     for (const id texture : visibility_)
+@@ -242,6 +243,7 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
+     record_shading_ = configuration.record_shading && compact_camera_;
+     specialize_foliage_ = configuration.specialize_foliage && !conv_fast_;
+     leaf_grain_ = configuration.leaf_grain;
++    integrate_ = configuration.integrate;
+     if (conv_fast_)
+         samples_ = 1;
+     source_vertices_ = scene.vertices().data();
+@@ -292,6 +294,11 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
+                                   std::istreambuf_iterator<char>());
+         }
+     }
++    if (integrate_) {
++        std::ifstream integration(shader_path.substr(0,shader_path.find_last_of('/'))+"/integration.metal");
++        if (!integration) { error_="Cannot open integration.metal"; return false; }
++        source="#define SW_INTEGRATE 1\n"+source+std::string(std::istreambuf_iterator<char>(integration),std::istreambuf_iterator<char>());
++    }
+     id error = nil;
+     id compile_options = nil;
+     if (conv_fast_) {
+@@ -305,6 +312,19 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
+         error_ = error_text(error);
+         return false;
+     }
++    if (integrate_) {
++        id function = send<id>(library, "newFunctionWithName:", string("integration_resolve"));
++        integration_pipeline_ = send<id>(device_, "newComputePipelineStateWithFunction:error:", function, &error);
++        release(function);
++        integration_records_ = send<id>(device_, "newBufferWithLength:options:", integration_capacity * 16UL, 32UL);
++        integration_count_ = send<id>(device_, "newBufferWithLength:options:", 16UL, 0UL);
++        if (integration_pipeline_ == nil || integration_records_ == nil || integration_count_ == nil) {
++            error_ = error_text(error); return false;
++        }
++        if (send<unsigned long>(integration_pipeline_, "threadExecutionWidth") != 32UL) {
++            error_ = "Integration trial requires a 32-lane SIMD group"; return false;
++        }
++    }
+     id vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_regular_vertex" : "tank_vertex"));
+     id fragment = send<id>(library, "newFunctionWithName:", string("tank_fragment"));
+     id shadow_vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_shadow_vertex" : "shadow_vertex"));
+@@ -345,7 +365,7 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
+     }
+     if (conv_fast_) {
+         id conv_vertex = send<id>(library, "newFunctionWithName:", string("conv_vertex"));
+-        id conv_fragment = send<id>(library, "newFunctionWithName:", string("conv_fragment"));
++        id conv_fragment = send<id>(library, "newFunctionWithName:", string(integrate_ ? "integration_fragment" : "conv_fragment"));
+         send<void>(descriptor, "setVertexFunction:", conv_vertex);
+         send<void>(descriptor, "setFragmentFunction:", conv_fragment);
+         conv_pipeline_ =
+@@ -580,6 +600,10 @@ bool Renderer::initialize(id layer, const Scene& scene, const std::string& shade
+         conv_arguments_ = send<id>(device_, "newBufferWithLength:options:",
+                                    static_cast<unsigned long>(conv_batches_.size()) * 16UL, 32UL);
+         statistics_.conv_source_triangles = list_count;
++        if (integrate_) {
++            integration_geometry_=send<id>(device_,"newBufferWithLength:options:",static_cast<unsigned long>(list_count)*48UL,32UL);
++            if (integration_geometry_ == nil) { error_="Cannot allocate integration geometry"; return false; }
++        }
+         statistics_.conv_storage_bytes = prepared_count * 40 + adjacency.size() * 4 +
+                                          static_cast<std::uint64_t>(list_count) * 12 +
+                                          group_count * 4 + conv_batches_.size() * 16;
+@@ -896,6 +920,11 @@ void Renderer::resize(unsigned int width, unsigned int height) {
+     width_ = width;
+     height_ = height;
+     update_reconstruction();
++    if (integrate_) {
++        release(integration_heads_);
++        integration_heads_ = send<id>(device_, "newBufferWithLength:options:", static_cast<unsigned long>(width)*height*4UL, 32UL);
++        if (integration_heads_ == nil) { error_="Cannot allocate integration heads"; return; }
++    }
+     statistics_.render_width = width;
+     statistics_.render_height = height;
+     statistics_.retained_bytes =
+@@ -926,6 +955,11 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
+             send<void>(encoder, "setFragmentTexture:atIndex:", materials_[index],
+                        static_cast<unsigned long>(index + 1));
+     }
++    if (integrate_ && pipeline == conv_pipeline_) {
++        send<void>(encoder, "setFragmentBuffer:offset:atIndex:", integration_heads_, 0UL, 8UL);
++        send<void>(encoder, "setFragmentBuffer:offset:atIndex:", integration_records_, 0UL, 9UL);
++        send<void>(encoder, "setFragmentBuffer:offset:atIndex:", integration_count_, 0UL, 10UL);
++    }
+     std::size_t batch_index = 0;
+     for (const Batch& batch : scene.batches()) {
+         const std::size_t conv_index = batch_index++;
+@@ -1030,6 +1064,10 @@ bool Renderer::prepare_conv_vertices(id command, const Scene& scene, const void*
+     send<void>(encoder, "setBuffer:offset:atIndex:", conv_adjacency_, 0UL, 2UL);
+     send<void>(encoder, "setBuffer:offset:atIndex:", conv_masks_, 0UL, 3UL);
+     send<void>(encoder, "setBuffer:offset:atIndex:", conv_counts_, 0UL, 7UL);
++    if (integrate_) {
++        send<void>(encoder,"setBuffer:offset:atIndex:",integration_geometry_,0UL,8UL);
++        send<void>(encoder,"setBuffer:offset:atIndex:",vertices_,0UL,9UL);
++    }
+     send<void>(encoder, "setBytes:length:atIndex:", uniforms, uniform_size, 6UL);
+     for (std::size_t index = 0; index < scene.batches().size(); ++index) {
+         const Batch& batch = scene.batches()[index];
+@@ -1415,6 +1453,13 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
+         ++statistics_.light_visibility_builds;
+     } else if (retained_)
+         ++statistics_.light_visibility_reuses;
++    if (integrate_) {
++        struct Range { unsigned long offset, length; };
++        id clear=send<id>(command,"blitCommandEncoder");
++        send<void>(clear,"fillBuffer:range:value:",integration_heads_,Range{0,static_cast<unsigned long>(width_)*height_*4UL},static_cast<unsigned char>(255));
++        send<void>(clear,"fillBuffer:range:value:",integration_count_,Range{0,16},static_cast<unsigned char>(0));
++        send<void>(clear,"endEncoding");
++    }
+     id pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
+     attachment = send<id>(send<id>(pass, "colorAttachments"), "objectAtIndexedSubscript:", 0UL);
+     id texture = send<id>(drawable, "texture");
+@@ -1450,10 +1495,23 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
+         }
+     }
+     send<void>(encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
+-    encode_geometry(encoder, scene, pipeline_, &uniforms, sizeof(uniforms),
+-                    retained_ ? DrawSet::uncached_surface : DrawSet::all, !conv_fast_);
++    if (!integrate_)
++        encode_geometry(encoder, scene, pipeline_, &uniforms, sizeof(uniforms),
++                        retained_ ? DrawSet::uncached_surface : DrawSet::all, !conv_fast_);
+     if (conv_fast_)
+         encode_geometry(encoder, scene, conv_pipeline_, &uniforms, sizeof(uniforms));
++    if (integrate_) {
++        id resolve=send<id>(command,"computeCommandEncoder");
++        send<void>(resolve,"setComputePipelineState:",integration_pipeline_);
++        send<void>(resolve,"setBuffer:offset:atIndex:",integration_heads_,0UL,0UL);
++        send<void>(resolve,"setBuffer:offset:atIndex:",integration_records_,0UL,1UL);
++        send<void>(resolve,"setBuffer:offset:atIndex:",integration_count_,0UL,2UL);
++        send<void>(resolve,"setBuffer:offset:atIndex:",integration_geometry_,0UL,3UL);
++        send<void>(resolve,"setTexture:atIndex:",texture,0UL);
++        struct Size { unsigned long x,y,z; };
++        send<void>(resolve,"dispatchThreadgroups:threadsPerThreadgroup:",Size{width_,height_,1},Size{32,1,1});
++        send<void>(resolve,"endEncoding");
++    }
+     send<void>(command, "presentDrawable:", drawable);
+     send<void>(command, "commit");
+     pending_[pending_count_++] = PendingCommand{apple::retain(command), updated_shadows};
+@@ -1467,6 +1525,11 @@ bool Renderer::draw(const Scene& scene, double time, const char* capture_path) {
+             fixed_shadow_ready_ = false;
+             return false;
+         }
++        if (integrate_) {
++            const std::uint32_t* counts=static_cast<const std::uint32_t*>(send<void*>(integration_count_,"contents"));
++            std::cerr<<"Integration records: "<<counts[0]<<", overflow: "<<counts[1]<<", maximum pixel list: "<<counts[2]<<'\n';
++            if (counts[1]!=0) { error_="Integration record capacity exceeded; no image accepted"; return false; }
++        }
+         return save_png(texture, queue_, width_, height_, capture_path);
+     }
+     return true;
+diff --git a/src/metal_renderer.hpp b/src/metal_renderer.hpp
+index 6c2b59f..3e7d279 100644
+--- a/src/metal_renderer.hpp
++++ b/src/metal_renderer.hpp
+@@ -33,6 +33,7 @@ struct RendererConfiguration {
+     bool record_shading{};
+     bool specialize_foliage{true};
+     bool leaf_grain{true};
++    bool integrate{};
+ };
+ struct VisibilityProbe {
+     std::array<Float4, 4> samples{};
+@@ -71,6 +72,10 @@ class Renderer final {
+   private:
+     id load_material(const std::string& path, bool srgb, const std::string& occlusion_path);
+     id make_leaf_texture();
++    bool integrate_{};
++    id integration_heads_{nil}, integration_records_{nil}, integration_count_{nil}, integration_geometry_{nil}, integration_pipeline_{nil};
++    static constexpr unsigned long integration_capacity = 24UL * 1024 * 1024;
++
+     void upload_actors(const Scene& scene);
+     bool upload_edits(id command, const Scene& scene);
+     id make_texture(unsigned long format, unsigned int width, unsigned int height,

@@ -182,7 +182,7 @@ vertex ConvOut conv_vertex(uint vertex_id [[vertex_id]], uint instance_id [[inst
 fragment float4 conv_fragment(ConvOut in [[stage_in]],constant Uniforms& u [[buffer(3)]],depth2d<float> shadow [[texture(0)]],
  texture2d<float> sand [[texture(1)]],texture2d<float> sand_normal [[texture(2)]],
  texture2d<float> rock [[texture(3)]],texture2d<float> rock_normal [[texture(4)]],
- texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]]) {
+ texture2d<float> wood [[texture(5)]],texture2d<float> wood_normal [[texture(6)]],texture2d<float> leaf_grain [[texture(7)]]) {
     if(in.twiceArea<=0)discard_fragment();
     float2 q=in.position.xy-in.origin;
     float2 edges[3]={in.e1,in.e2-in.e1,-in.e2};
@@ -205,7 +205,7 @@ fragment float4 conv_fragment(ConvOut in [[stage_in]],constant Uniforms& u [[buf
     Out surface;surface.position=in.position;surface.world=in.world;surface.normal=in.normal;
     surface.local=in.local;surface.color=in.color;surface.behavior=in.behavior;
     surface.light_position=in.light_position;surface.uv=in.uv;surface.surface=in.surface;surface.identity=0;
-    float4 color=shade_tank(surface,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,in.front!=0);
+    float4 color=shade_tank(surface,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,in.front!=0);
     color.a*=saturate(area);
     return color;
 }

@@ -1,0 +1,231 @@
+{
+  "base_commit": "0cd481f6d42435855801d615c15ef84ad4178228",
+  "hardware": "MacBook Neo, A18 Pro, 8 GiB unified memory",
+  "date": "2026-09-23",
+  "status": "quality trial; not promoted",
+  "conditions": {
+    "dimensions": [
+      1408,
+      881
+    ],
+    "leaf_grain": false,
+    "fps_cap": 24,
+    "ordinary_desktop_process_left_running": true,
+    "animated_run_seconds_requested": 8,
+    "startup_included": true,
+    "interpretation": "GPU command duration is not GPU utilization or power"
+  },
+  "active_runs": {
+    "baseline": {
+      "raw": {
+        "objects": 9554,
+        "actors": 18,
+        "frames": 193,
+        "wall_seconds": 8.08735,
+        "process_cpu_seconds_including_startup": 0.686951,
+        "peak_rss_bytes": 397950976,
+        "submit_wall_seconds": 0.315527,
+        "static_upload_bytes": 85215064,
+        "material_storage_bytes": 39698432,
+        "shadow_storage_bytes": 33816576,
+        "geometry_storage_bytes": 85216504,
+        "gpu_executed_seconds": 4.46776,
+        "gpu_timed_frames": 193,
+        "gpu_shadow_frame_seconds": 3.2207,
+        "gpu_shadow_frames": 128,
+        "gpu_reuse_frame_seconds": 1.24706,
+        "gpu_reuse_frames": 65,
+        "conv_storage_bytes": 0,
+        "conv_source_triangles": 0,
+        "conv_boundary_triangles": 0,
+        "conv_static_updates": 0,
+        "conv_moving_updates": 0,
+        "compact_camera": true,
+        "record_shading": false,
+        "specialize_foliage": true,
+        "leaf_grain": false,
+        "camera_records": 1599415,
+        "camera_registration_builds": 1,
+        "camera_acquisition_command_gpu_seconds": 0.0518624,
+        "msaa_samples": 4,
+        "conv_fast": false,
+        "render_scale": 1,
+        "requested_fps": 24,
+        "actor_upload_bytes": 1440,
+        "geometry_builds": 1,
+        "instance_patch_bytes": 0,
+        "static_shadow_builds": 1,
+        "dynamic_shadow_frames": 128,
+        "visibility_builds": 1,
+        "visibility_reuses": 192,
+        "light_visibility_builds": 128,
+        "light_visibility_reuses": 65,
+        "retained_bytes": 84477956,
+        "transient_backing_bytes": 0,
+        "memoryless_targets": true,
+        "gpu_allocated_bytes": 256458752,
+        "render_width": 1408,
+        "render_height": 881,
+        "fixed_camera_draws": 21,
+        "moving_camera_draws": 965,
+        "actor_edits": 0,
+        "taps": 0,
+        "pointer_reactions": 0,
+        "paused": false,
+        "desktop": true,
+        "menu_bar_visible": true,
+        "aquarium_accepts_keyboard": false,
+        "aquarium_is_key": false,
+        "window_level": -2147483622,
+        "ignores_mouse": true,
+        "raster_mode": "retained fixed visibility and lighting"
+      },
+      "derived_fps": 23.864430252183965,
+      "mean_gpu_command_ms": 23.14901554404145,
+      "metal_allocated_mib": 244.578125
+    },
+    "integration": {
+      "raw": {
+        "objects": 9554,
+        "actors": 18,
+        "frames": 35,
+        "wall_seconds": 8.29409,
+        "process_cpu_seconds_including_startup": 0.55168,
+        "peak_rss_bytes": 384483328,
+        "submit_wall_seconds": 7.83799,
+        "static_upload_bytes": 85215064,
+        "material_storage_bytes": 39698432,
+        "shadow_storage_bytes": 33816576,
+        "geometry_storage_bytes": 85216504,
+        "gpu_executed_seconds": 8.70189,
+        "gpu_timed_frames": 35,
+        "gpu_shadow_frame_seconds": 8.45232,
+        "gpu_shadow_frames": 34,
+        "gpu_reuse_frame_seconds": 0.24957,
+        "gpu_reuse_frames": 1,
+        "conv_storage_bytes": 82077852,
+        "conv_source_triangles": 1620274,
+        "conv_boundary_triangles": 1161643,
+        "conv_static_updates": 735,
+        "conv_moving_updates": 175,
+        "compact_camera": false,
+        "record_shading": false,
+        "specialize_foliage": false,
+        "leaf_grain": false,
+        "camera_records": 0,
+        "camera_registration_builds": 0,
+        "camera_acquisition_command_gpu_seconds": 0,
+        "msaa_samples": 1,
+        "conv_fast": true,
+        "render_scale": 1,
+        "requested_fps": 24,
+        "actor_upload_bytes": 1440,
+        "geometry_builds": 1,
+        "instance_patch_bytes": 0,
+        "static_shadow_builds": 1,
+        "dynamic_shadow_frames": 34,
+        "visibility_builds": 0,
+        "visibility_reuses": 0,
+        "light_visibility_builds": 0,
+        "light_visibility_reuses": 0,
+        "retained_bytes": 0,
+        "transient_backing_bytes": 4961792,
+        "memoryless_targets": false,
+        "gpu_allocated_bytes": 742506496,
+        "render_width": 1408,
+        "render_height": 881,
+        "fixed_camera_draws": 735,
+        "moving_camera_draws": 175,
+        "actor_edits": 0,
+        "taps": 0,
+        "pointer_reactions": 0,
+        "paused": false,
+        "desktop": true,
+        "menu_bar_visible": true,
+        "aquarium_accepts_keyboard": false,
+        "aquarium_is_key": false,
+        "window_level": -2147483622,
+        "ignores_mouse": true,
+        "raster_mode": "full-frame fallback"
+      },
+      "derived_fps": 4.219872222269109,
+      "mean_gpu_command_ms": 248.6254285714286,
+      "metal_allocated_mib": 708.109375
+    }
+  },
+  "captures": {
+    "baseline": {
+      "path": "artifacts/leaf-edge-diagnosis/baseline.png",
+      "sha256": "4ec921f8ad4a20f60c005d2eab94116e23aea83b162571028c835a0ca8430776"
+    },
+    "spatial_reference": {
+      "path": "artifacts/leaf-edge-diagnosis/spatial-4x.png",
+      "sha256": "b4f58075ab0ef4f65ac5eab2d881af75a1eab73474e0d06f86925f8911b8ad59"
+    },
+    "integration": {
+      "path": "artifacts/integration/simd.png",
+      "sha256": "3dda1fdb7013135b0b423bb9f22dd0d4e5b5f917b867675c02ebb6c6c29bc8af"
+    },
+    "integration_repeat": {
+      "path": "artifacts/integration/simd-repeat.png",
+      "sha256": "3dda1fdb7013135b0b423bb9f22dd0d4e5b5f917b867675c02ebb6c6c29bc8af"
+    },
+    "comparison": {
+      "path": "experiments/pixel-integration/comparison.png",
+      "sha256": "2ee34d0da08d0c664fa4cd5e2c9d94d5d092d7af2280282d00af90d7929da051"
+    }
+  },
+  "numerical_checks": {
+    "serial_vs_simd_max_channel_error_255": 1,
+    "serial_vs_simd_mean_channel_error_255": 3.4933615381969524e-06,
+    "simd_repeated_fixed_time_pixel_identical": true,
+    "fixed_time_seconds": 8,
+    "contribution_records": 16266275,
+    "max_pixel_list": 543,
+    "record_overflow": 0
+  },
+  "validation": {
+    "verify-2": {
+      "comparisons": 19,
+      "failures": 0
+    },
+    "verify-4": {
+      "comparisons": 19,
+      "failures": 0
+    },
+    "generic-2": {
+      "comparisons": 19,
+      "failures": 0
+    },
+    "generic-4": {
+      "comparisons": 19,
+      "failures": 0
+    },
+    "compare-2": {
+      "passed": true
+    },
+    "compare-4": {
+      "passed": true
+    },
+    "specialized-2": {
+      "passed": true
+    },
+    "specialized-4": {
+      "passed": true
+    },
+    "core_ctest": "passed",
+    "asset_checksums": 18,
+    "isolated_reproduction": "passed, two-second animation smoke runs and repeated fixed-time captures",
+    "overflow_guard": {
+      "forced_capacity_records": 1,
+      "overflow_reported": true,
+      "capture_rejected": true,
+      "note": "Existing host returns zero despite rejected capture; reproduction script independently checks image and overflow log."
+    }
+  },
+  "source_sha256": {
+    "prototype.patch": "37762493667a3155ecad24f7e779a5b5768ab4715eac36d43e2d5215294a3f39",
+    "integration.metal": "a81906bd7335c9d0541b231e6f8925aba82aed5cbd9301699ae77ca43f10285d",
+    "run.py": "38b981de63dbe5f42c8729b5db58b8d06e4d4306ae5c520a4967a4af90c78141"
+  }
+}

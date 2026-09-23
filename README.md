@@ -147,7 +147,13 @@ repeating loop. See [sound, bubbles and interaction notes](docs/ATMOSPHERE.md).
 The optional `--aa conv-fast` geometry-coverage experiment and `--aa point`
 control are documented in [CONV_AA.md](docs/CONV_AA.md). Normal launches keep
 4× MSAA. The experimental path has unresolved overlap and alpha-to-coverage
-quality differences, and is not the default.
+quality differences, and is not the default. A separate
+[whole-frame pixel-integration trial](experiments/pixel-integration/README.md)
+improves fine leaf edges with 64 visibility positions per pixel, but its measured
+cost is too high for normal use; its reproduction script builds isolated apps.
+The newer [two-offset-view trial](experiments/paired-view/README.md) averages two
+ordinary 4× MSAA renders and held 24 fps in the Neo cost screen. It is available
+as an isolated app while edge quality and motion are evaluated.
 
 The default MSAA renderer now stores a compact camera-local surface registry.
 At the Neo's 1408×881 size, it preserves the four depth samples while sharing

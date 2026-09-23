@@ -1,0 +1,135 @@
+--- a/src/metal_renderer.hpp
++++ b/src/metal_renderer.hpp
+@@ -83,6 +83,8 @@
+         background_pipeline_{nil}, depth_state_{nil};
+     id vertices_{nil}, indices_{nil}, instances_{nil}, actors_{nil}, depth_{nil}, shadow_{nil},
+         color_{nil};
++    std::array<id, 2> paired_color_{};
++    id paired_resolve_{nil};
+     std::array<id, 7> materials_{};
+     std::array<id, 4> visibility_{};
+     id visibility_depth_{nil}, visibility_pipeline_{nil}, restore_pipeline_{nil},
+--- a/src/metal_renderer.cpp
++++ b/src/metal_renderer.cpp
+@@ -162,6 +162,8 @@
+ } // namespace
+ Renderer::~Renderer() {
+     finish_pending(true);
++    for (const id texture : paired_color_)release(texture);
++    release(paired_resolve_);
+     for (const id material : materials_)
+         release(material);
+     for (const id texture : visibility_)
+@@ -305,6 +307,10 @@
+         error_ = error_text(error);
+         return false;
+     }
++    id paired_function=send<id>(library,"newFunctionWithName:",string("paired_resolve"));
++    paired_resolve_=send<id>(device_,"newComputePipelineStateWithFunction:error:",paired_function,&error);
++    release(paired_function);
++    if(paired_resolve_==nil) {error_=error_text(error);return false;}
+     id vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_regular_vertex" : "tank_vertex"));
+     id fragment = send<id>(library, "newFunctionWithName:", string("tank_fragment"));
+     id shadow_vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_shadow_vertex" : "shadow_vertex"));
+@@ -851,6 +857,14 @@
+         error_ = "Invalid render dimensions";
+         return;
+     }
++    std::array<id,2> paired{};
++    for (id& target : paired)target=make_texture(80UL,width,height,5UL);
++    if(paired[0]==nil || paired[1]==nil) {
++        for(const id target : paired)release(target);
++        error_="Cannot allocate paired-view targets";return;
++    }
++    for(const id target : paired_color_)release(target);
++    paired_color_=paired;
+     id replacement = make_texture(252UL, width, height, 4UL, samples_, !conv_fast_);
+     id color = samples_ > 1 ? make_texture(80UL, width, height, 4UL, samples_, true) : nil;
+     id visibility_depth = retained_ ? make_texture(252UL, width, height, 5UL, samples_) : nil;
+@@ -1270,6 +1284,7 @@
+         error_ = "Scene storage replaced; recreate the renderer before drawing";
+         return false;
+     }
++    if (retained_ || conv_fast_) {error_="Paired-view trial requires --full-redraw and ordinary MSAA";return false;}
+     if (width_ == 0 || height_ == 0 || (retained_ && visibility_depth_ == nil))
+         return false;
+     const Clock::time_point start = Clock::now();
+@@ -1415,12 +1430,17 @@
+         ++statistics_.light_visibility_builds;
+     } else if (retained_)
+         ++statistics_.light_visibility_reuses;
++    id texture=send<id>(drawable,"texture");
++    for(unsigned int phase=0;phase<2;++phase) {
++        Uniforms phase_uniforms=uniforms;
++        phase_uniforms.illumination.z=phase==0 ? -0.25F : 0.25F;
++        phase_uniforms.illumination.w=phase==0 ? -0.25F : 0.25F;
+     id pass = send<id>(type("MTLRenderPassDescriptor"), "renderPassDescriptor");
+     attachment = send<id>(send<id>(pass, "colorAttachments"), "objectAtIndexedSubscript:", 0UL);
+-    id texture = send<id>(drawable, "texture");
+-    send<void>(attachment, "setTexture:", samples_ > 1 ? color_ : texture);
++    id phase_texture=paired_color_[phase];
++    send<void>(attachment, "setTexture:", samples_ > 1 ? color_ : phase_texture);
+     if (samples_ > 1)
+-        send<void>(attachment, "setResolveTexture:", texture);
++        send<void>(attachment, "setResolveTexture:", phase_texture);
+     send<void>(attachment, "setLoadAction:", 2UL);
+     send<void>(attachment, "setStoreAction:", samples_ > 1 ? 2UL : 1UL);
+     send<void>(attachment, "setClearColor:", ClearColor{0.0874, 0.209, 0.225, 1});
+@@ -1432,8 +1452,8 @@
+     encoder = send<id>(command, "renderCommandEncoderWithDescriptor:", pass);
+     send<void>(encoder,
+                "setRenderPipelineState:", retained_ ? restore_pipeline_ : background_pipeline_);
+-    send<void>(encoder, "setFragmentBytes:length:atIndex:", static_cast<const void*>(&uniforms),
+-               static_cast<unsigned long>(sizeof(uniforms)), 3UL);
++    send<void>(encoder, "setFragmentBytes:length:atIndex:", static_cast<const void*>(&phase_uniforms),
++               static_cast<unsigned long>(sizeof(phase_uniforms)), 3UL);
+     if (retained_) {
+         send<void>(encoder, "setDepthStencilState:", restore_depth_state_);
+         send<void>(encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
+@@ -1450,10 +1470,20 @@
+         }
+     }
+     send<void>(encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
+-    encode_geometry(encoder, scene, pipeline_, &uniforms, sizeof(uniforms),
++    encode_geometry(encoder, scene, pipeline_, &phase_uniforms, sizeof(phase_uniforms),
+                     retained_ ? DrawSet::uncached_surface : DrawSet::all, !conv_fast_);
+     if (conv_fast_)
+-        encode_geometry(encoder, scene, conv_pipeline_, &uniforms, sizeof(uniforms));
++        encode_geometry(encoder, scene, conv_pipeline_, &phase_uniforms, sizeof(phase_uniforms));
++
++    }
++    id combine=send<id>(command,"computeCommandEncoder");
++    send<void>(combine,"setComputePipelineState:",paired_resolve_);
++    send<void>(combine,"setTexture:atIndex:",paired_color_[0],0UL);
++    send<void>(combine,"setTexture:atIndex:",paired_color_[1],1UL);
++    send<void>(combine,"setTexture:atIndex:",texture,2UL);
++    struct Size {unsigned long x,y,z;};
++    send<void>(combine,"dispatchThreads:threadsPerThreadgroup:",Size{width_,height_,1},Size{8,8,1});
++    send<void>(combine,"endEncoding");
+     send<void>(command, "presentDrawable:", drawable);
+     send<void>(command, "commit");
+     pending_[pending_count_++] = PendingCommand{apple::retain(command), updated_shadows};
+--- a/assets/aquarium.metal
++++ b/assets/aquarium.metal
+@@ -159,7 +159,8 @@
+     Out out;out.world=world;out.normal=n;out.local=p;out.color=instance.color;out.behavior=instance.behavior;
+     out.uv=sample.uv;out.surface=float4(sample.normal.w,sample.anchor.w,sample.binding.z,0);
+     if(sample.binding.z>0.5f) out.color*=sample.color;
+-    out.position=u.camera*float4(world,1);out.light_position=u.light*float4(world,1);return out;
++    out.position=u.camera*float4(world,1);
++    out.position.xy+=u.illumination.zw/u.clock.yz*float2(2,-2)*out.position.w;out.light_position=u.light*float4(world,1);return out;
+ }
+ vertex Out tank_vertex(uint vertex_id [[vertex_id]],uint instance_id [[instance_id]],
+                        constant Vertex* vertices [[buffer(0)]],constant Instance* instances [[buffer(1)]],
+@@ -660,3 +661,11 @@
+     in.behavior.x=10;
+     return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,front);
+ }
++
++// Two simultaneous projection phases, resolved in the existing display-color convention.
++kernel void paired_resolve(texture2d<float,access::read> first [[texture(0)]],
++ texture2d<float,access::read> second [[texture(1)]],
++ texture2d<float,access::write> result [[texture(2)]],uint2 pixel [[thread_position_in_grid]]) {
++    if(pixel.x>=result.get_width() || pixel.y>=result.get_height())return;
++    result.write(float4((first.read(pixel).rgb+second.read(pixel).rgb)*0.5f,1),pixel);
++}
