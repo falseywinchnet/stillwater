@@ -6,7 +6,9 @@ MSAA. A GPU pass averages their resolved colors. The two views share scene
 geometry, textures, actors, animation time and shadows. No previous frame is
 involved, so this does not introduce temporal history or fish-motion ghosting.
 
-This is an isolated, live quality trial. The production default remains the
+This is an isolated, live quality trial. The current reproduction includes the
+[per-blade self-shadow suppression](../leaf-shadow/README.md); the original AA
+comparison and timing table below predate that change. The production default remains the
 accepted retained renderer with 4× MSAA.
 
 ![Normal 4× MSAA, two-view GPU average, and 4× spatial reference](comparison.png)
@@ -79,7 +81,7 @@ From a complete clone on a Mac with CMake, the Apple C++ toolchain, Python 3,
 python3 experiments/paired-view/run.py
 ```
 
-The script exports base commit `0cd481f6d42435855801d615c15ef84ad4178228`,
+The script exports base commit `0cbdc5bbd149942cd87e5160470f03a0a5027fc4`,
 applies `prototype.patch` only to the exported copy, builds a separate app,
 checks repeated fixed-time captures and records a short animated run. It never
 edits the working renderer or normal app bundle. `--output` selects a new

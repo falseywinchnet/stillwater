@@ -1,6 +1,6 @@
 --- a/src/metal_renderer.hpp
 +++ b/src/metal_renderer.hpp
-@@ -83,6 +83,8 @@
+@@ -84,6 +84,8 @@
          background_pipeline_{nil}, depth_state_{nil};
      id vertices_{nil}, indices_{nil}, instances_{nil}, actors_{nil}, depth_{nil}, shadow_{nil},
          color_{nil};
@@ -11,16 +11,7 @@
      id visibility_depth_{nil}, visibility_pipeline_{nil}, restore_pipeline_{nil},
 --- a/src/metal_renderer.cpp
 +++ b/src/metal_renderer.cpp
-@@ -162,6 +162,8 @@
- } // namespace
- Renderer::~Renderer() {
-     finish_pending(true);
-+    for (const id texture : paired_color_)release(texture);
-+    release(paired_resolve_);
-     for (const id material : materials_)
-         release(material);
-     for (const id texture : visibility_)
-@@ -305,6 +307,10 @@
+@@ -308,6 +308,10 @@
          error_ = error_text(error);
          return false;
      }
@@ -31,7 +22,7 @@
      id vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_regular_vertex" : "tank_vertex"));
      id fragment = send<id>(library, "newFunctionWithName:", string("tank_fragment"));
      id shadow_vertex = send<id>(library, "newFunctionWithName:", string(conv_fast_ ? "conv_shadow_vertex" : "shadow_vertex"));
-@@ -851,6 +857,14 @@
+@@ -871,6 +875,14 @@
          error_ = "Invalid render dimensions";
          return;
      }
@@ -46,7 +37,7 @@
      id replacement = make_texture(252UL, width, height, 4UL, samples_, !conv_fast_);
      id color = samples_ > 1 ? make_texture(80UL, width, height, 4UL, samples_, true) : nil;
      id visibility_depth = retained_ ? make_texture(252UL, width, height, 5UL, samples_) : nil;
-@@ -1270,6 +1284,7 @@
+@@ -1295,6 +1307,7 @@
          error_ = "Scene storage replaced; recreate the renderer before drawing";
          return false;
      }
@@ -54,7 +45,7 @@
      if (width_ == 0 || height_ == 0 || (retained_ && visibility_depth_ == nil))
          return false;
      const Clock::time_point start = Clock::now();
-@@ -1415,12 +1430,17 @@
+@@ -1450,12 +1463,17 @@
          ++statistics_.light_visibility_builds;
      } else if (retained_)
          ++statistics_.light_visibility_reuses;
@@ -75,7 +66,7 @@
      send<void>(attachment, "setLoadAction:", 2UL);
      send<void>(attachment, "setStoreAction:", samples_ > 1 ? 2UL : 1UL);
      send<void>(attachment, "setClearColor:", ClearColor{0.0874, 0.209, 0.225, 1});
-@@ -1432,8 +1452,8 @@
+@@ -1467,8 +1485,8 @@
      encoder = send<id>(command, "renderCommandEncoderWithDescriptor:", pass);
      send<void>(encoder,
                 "setRenderPipelineState:", retained_ ? restore_pipeline_ : background_pipeline_);
@@ -86,7 +77,7 @@
      if (retained_) {
          send<void>(encoder, "setDepthStencilState:", restore_depth_state_);
          send<void>(encoder, "setFragmentTexture:atIndex:", shadow_, 0UL);
-@@ -1450,10 +1470,20 @@
+@@ -1485,10 +1503,20 @@
          }
      }
      send<void>(encoder, "drawPrimitives:vertexStart:vertexCount:", 3UL, 0UL, 3UL);
@@ -111,8 +102,8 @@
      pending_[pending_count_++] = PendingCommand{apple::retain(command), updated_shadows};
 --- a/assets/aquarium.metal
 +++ b/assets/aquarium.metal
-@@ -159,7 +159,8 @@
-     Out out;out.world=world;out.normal=n;out.local=p;out.color=instance.color;out.behavior=instance.behavior;
+@@ -160,7 +160,8 @@
+     Out out;out.leaf_identity=uint(sample.binding.w);out.world=world;out.normal=n;out.local=p;out.color=instance.color;out.behavior=instance.behavior;
      out.uv=sample.uv;out.surface=float4(sample.normal.w,sample.anchor.w,sample.binding.z,0);
      if(sample.binding.z>0.5f) out.color*=sample.color;
 -    out.position=u.camera*float4(world,1);out.light_position=u.light*float4(world,1);return out;
@@ -121,9 +112,9 @@
  }
  vertex Out tank_vertex(uint vertex_id [[vertex_id]],uint instance_id [[instance_id]],
                         constant Vertex* vertices [[buffer(0)]],constant Instance* instances [[buffer(1)]],
-@@ -660,3 +661,11 @@
+@@ -707,3 +708,11 @@
      in.behavior.x=10;
-     return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,front);
+     return riverscape_fragment(in,u,shadow,sand,sand_normal,rock,rock_normal,wood,wood_normal,leaf_grain,shadow_leaf,shadow_other,front);
  }
 +
 +// Two simultaneous projection phases, resolved in the existing display-color convention.
