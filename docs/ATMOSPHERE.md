@@ -11,8 +11,10 @@ The live audio queue owns a continuous C++ generator with five motor modes and
 ambience loop. The previous 16-second stereo float loop occupied 2.69 MiB.
 The motor uses a quiet 60 Hz harmonic series weighted toward 120 Hz, with filtered
 mechanical noise. Bubble formation uses exponential waiting times, a distribution
-of radii, short damped resonances, and low-pass filtering. Independent, filtered
-noise bursts supply the quiet surface-water layer. There are no rising pitch
+of radii, short damped resonances, and low-pass filtering. A very quiet continuous filtered
+noise bed supplies the return-water layer. The initial random splash envelopes
+(0.65 seconds mean spacing) were removed after the listener reported recurring
+mechanical clatter. That identifies a candidate cause, pending a listening check. There are no rising pitch
 sweeps or scheduled repeating phrases. Restarting sound applies a half-second fade.
 
 The approximate shallow-water bubble relation f ≈ 3.26 / radius-in-metres follows
@@ -24,8 +26,8 @@ listening on the intended speakers or headphones.
 
 The glass tap is now a 200 ms, heavily damped fingertip contact. The previous
 730/1931/3173 Hz metallic ring and 157 Hz knock were much too prominent: the new
-centered export peaks 34.1 dB below the old one. New ambience peaks at −36.94 dBFS
-and has RMS 0.00370; the new centered tap peaks at −42.70 dBFS. These are digital
+centered export peaks 34.1 dB below the old one. The burst-free ambience peaks at -38.40 dBFS
+and has RMS 0.00359; the new centered tap peaks at −42.70 dBFS. These are digital
 sample levels, not measured loudness at the listener's ears. Runtime stays muted
 when launched with `--muted`; sound is enabled through the menu.
 

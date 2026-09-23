@@ -66,13 +66,6 @@ void Ambience::render(std::span<float> stereo) {
         if (until_bubble_ == 0)
             bubble();
         --until_bubble_;
-        if (until_surface_ == 0) {
-            surface_ += 0.18 + 0.55 * random();
-            until_surface_ = 1U + static_cast<unsigned int>(
-                -std::log(random()) * audio_sample_rate * 0.65);
-        }
-        --until_surface_;
-        surface_ *= 0.99935;
         double bubbles_left = 0, bubbles_right = 0;
         for (Resonance& voice : bubbles_) {
             if (voice.remaining == 0)
@@ -100,7 +93,9 @@ void Ambience::render(std::span<float> stereo) {
         water_low_right_ += 0.012 * (water_right_ - water_low_right_);
         bubble_left_ += 0.22 * (bubbles_left - bubble_left_);
         bubble_right_ += 0.22 * (bubbles_right - bubble_right_);
-        const double water_gain = 0.006 + 0.012 * std::min(surface_, 1.5);
+        // Continuous low-level return flow. Discrete noise envelopes sounded like
+        // mechanical impacts rather than surface water; do not retrigger them.
+        constexpr double water_gain = 0.004;
         const double motor = pump * (1 + 0.08 * motor_air_) + 0.004 * motor_air_;
         stereo[index] = static_cast<float>(fade_ * (motor + bubble_left_ +
             water_gain * (water_left_ - water_low_left_)));
