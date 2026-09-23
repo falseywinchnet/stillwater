@@ -1,0 +1,29 @@
+{
+  "source": "chaseleantj/desktop-habitats",
+  "commit": "66e80ea1b6bafd25324c84c72067e750c1a1f334",
+  "counts": {
+    "vertices": 573690,
+    "indices": 2668926,
+    "objects": 7696,
+    "batches": 24,
+    "actors": 16
+  },
+  "decompressedBytes": 85217944,
+  "compressedBytes": 23483256,
+  "planting": {
+    "backgroundCandidates": 1564,
+    "backgroundKept": 1094,
+    "backgroundVertices": 68922,
+    "backgroundTriangles": 87520,
+    "vertices": 374989,
+    "triangles": 502066
+  },
+  "omitted": [
+    "contact-shadow image planes",
+    "backboard",
+    "browser host",
+    "Three.js runtime",
+    "CPU fish behavior",
+    "postprocessing"
+  ]
+}

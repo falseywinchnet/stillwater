@@ -1,0 +1,10 @@
+Wood, rock and sand texture assets: Poly Haven, CC0.
+https://polyhaven.com/license
+https://creativecommons.org/publicdomain/zero/1.0/
+
+rock_boulder_dry: https://polyhaven.com/a/rock_boulder_dry
+rough_wood: https://polyhaven.com/a/rough_wood
+sand_01: https://polyhaven.com/a/sand_01
+
+Copied from chaseleantj/desktop-habitats at
+66e80ea1b6bafd25324c84c72067e750c1a1f334, whose README identifies these sources.

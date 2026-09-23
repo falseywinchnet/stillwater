@@ -1,0 +1,12 @@
+{
+  "changed_channels": 56,
+  "total_channels": 2577120,
+  "max_difference_255": 18,
+  "mean_difference_255": 0.0001292140063326504,
+  "bbox": [
+    71,
+    396,
+    1138,
+    710
+  ]
+}

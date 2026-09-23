@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/chaseleantj/desktop-habitats",
+  "commit": "66e80ea1b6bafd25324c84c72067e750c1a1f334",
+  "files": {
+    "LICENSE": "b660528234fa02f2c865e920aff83cf4bfc0f0650e6b7f85de91149dad7e3f78",
+    "README.md": "3a4f4293c428cc7b7ee475ca2b582d70035d2526ed5530a588af2c14a7a757ae",
+    "vendor/three.module.js": "c8211c69345d2e9949dc7a8ac969380497aa0600a5a8ac6a459c8cd02dd9cb8a",
+    "vendor/three.core.js": "eb077d2417f61d3e6d9264c317cabc4ea35769ed6b0ab533067292a550784c20",
+    "vendor/THREE-LICENSE.txt": "bfe119ea4fd413f5f7ca3fcd63adb0c4a073ed39daa2fe7d3e6b769e21272601",
+    "scenes/shared/random.js": "aec52e680e46616438483d9d45f6fe1dff9eedaaa8bf103666a4753e2263d283",
+    "scenes/riverscape/src/math.js": "177059274ff9d4aaa23d73e70149c1286507a2ed917fa6810c1ac24d3344a008",
+    "scenes/riverscape/src/water.js": "d84db946d6c5f0b09bf1d5323598bab1c0da241a4cc422ffe84880b4e31ef6df",
+    "scenes/riverscape/src/environment.js": "d038fd3a2c337626948c1f0ec5345458ad2b3ef894a020b0f4fa1a8182727db5",
+    "scenes/riverscape/src/foliage.js": "000247a69c7331fc521c62705e95fbf6bd9750e1fdb06866e1b58936b8e0dabb",
+    "scenes/riverscape/src/plants.js": "12bf0cdccbaec7adcc9491f664329b516b7339388480be93349a07723567ba97",
+    "scenes/riverscape/src/broadleaf.js": "c4fb83bf8226204d77f46412705aa02a7bbda2ec465316e191c2aec740c645b7",
+    "scenes/riverscape/src/stemplants.js": "af31d25c9237ea6d7184502b863040dde2e1d830e02269540c254465b2f8dd0e",
+    "scenes/riverscape/src/fish-anatomy.js": "ac1f4fbef0f68db8ec547346e162af8fdf3bcdc7399387e1f00ba66904a543b1"
+  }
+}

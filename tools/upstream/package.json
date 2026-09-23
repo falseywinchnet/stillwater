@@ -1,0 +1,5 @@
+{
+  "name": "three",
+  "type": "module",
+  "exports": "./vendor/three.module.js"
+}
