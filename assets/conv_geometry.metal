@@ -76,7 +76,10 @@ kernel void conv_prepare(uint index [[thread_position_in_grid]],
     uint instance_id=batch.first_instance+index/batch.vertex_count;
     Vertex sample=vertices[vertex_id];
     uint object=sample.binding.y>.5f ? uint(sample.binding.x) : instance_id;
-    Out out=prepare(sample,instances[object],actors,u);
+    Instance instance=instances[object];
+    if(int(instance.behavior.x)==15)
+        instance=pearl_transform(instance,vertices[uint(instance.anatomy.x)],instances[uint(instance.anatomy.y)],u.clock.x);
+    Out out=prepare(sample,instance,actors,u);
     prepared[batch.prepared_offset+index]={packed_float4(out.position),packed_float3(out.normal),packed_float3(out.local)};
 }
 Out conv_load(Vertex sample,Instance instance,ConvPrepared prepared,constant Uniforms& u) {

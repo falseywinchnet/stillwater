@@ -5,6 +5,7 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <numbers>
 #include <zlib.h>
 
 namespace stillwater {
@@ -130,6 +131,14 @@ bool Scene::load_habitat(const std::string& path, std::string& error) {
                            entry.radius,
                            entry.actor});
     }
+    // The original translation enlarged every fish and flattened its depth range.
+    // Restore upstream's 0.83..1.08 body scale, distributed across the water column.
+    for (std::size_t index = 0; index < actors.size(); ++index) {
+        Actor& actor = actors[index];
+        const double seed = std::fmod(static_cast<double>(index) * 0.61803398875 + 0.23, 1.0);
+        actor.center.w = static_cast<float>(0.83 + 0.25 * seed);
+        actor.center.z = static_cast<float>(2.2 - 5.8 * std::fmod(seed * 3.71, 1.0));
+    }
     // Keep our C++ crabs and bubble emitter alongside the translated planting and fish.
     // The original scene is untouched until the complete replacement is valid.
     const std::uint32_t sphere_base = static_cast<std::uint32_t>(vertices.size());
@@ -160,6 +169,68 @@ bool Scene::load_habitat(const std::string& path, std::string& error) {
         ++extras.instance_count;
     }
     batches.push_back(extras);
+    // One tiny shared mesh for leaf pearls: 96 triangles, with no particle framebuffer.
+    const std::uint32_t pearl_base = static_cast<std::uint32_t>(vertices.size());
+    Batch pearls{{static_cast<std::uint32_t>(indices.size()), 0},
+                 static_cast<std::uint32_t>(instances.size()), 0};
+    constexpr std::uint32_t rings = 6, segments = 8;
+    for (std::uint32_t row = 0; row <= rings; ++row) {
+        for (std::uint32_t column = 0; column <= segments; ++column) {
+            const double latitude = std::numbers::pi * row / rings;
+            const double longitude = 2 * std::numbers::pi * column / segments;
+            const Float4 point{static_cast<float>(std::sin(latitude) * std::cos(longitude)),
+                               static_cast<float>(std::cos(latitude)),
+                               static_cast<float>(std::sin(latitude) * std::sin(longitude)), 1};
+            vertices.push_back({point, {point.x, point.y, point.z, 0}});
+        }
+    }
+    for (std::uint32_t row = 0; row < rings; ++row) {
+        for (std::uint32_t column = 0; column < segments; ++column) {
+            const std::uint32_t first = pearl_base + row * (segments + 1) + column;
+            const std::uint32_t next = first + segments + 1;
+            indices.insert(indices.end(), {first, next, first + 1, first + 1, next, next + 1});
+        }
+    }
+    pearls.mesh.index_count = static_cast<std::uint32_t>(indices.size()) - pearls.mesh.first_index;
+    std::vector<unsigned int> per_plant(header.instances, 0);
+    std::uint32_t seed = 81731U;
+    for (std::uint32_t index = 0; index < header.vertices && pearls.instance_count < 144; ++index) {
+        const Vertex& leaf = vertices[index];
+        if (leaf.binding.y < 0.5F)
+            continue;
+        const std::size_t parent = static_cast<std::size_t>(leaf.binding.x);
+        if (instances[parent].behavior.x != 10 || per_plant[parent] >= 2 ||
+            leaf.uv.x < 0.30F || leaf.uv.x > 0.70F || leaf.uv.y < 0.30F || leaf.uv.y > 0.85F)
+            continue;
+        const Matrix& matrix = instances[parent].transform;
+        const Vec3 point{
+            matrix.values[0]*leaf.position.x + matrix.values[4]*leaf.position.y + matrix.values[8]*leaf.position.z + matrix.values[12],
+            matrix.values[1]*leaf.position.x + matrix.values[5]*leaf.position.y + matrix.values[9]*leaf.position.z + matrix.values[13],
+            matrix.values[2]*leaf.position.x + matrix.values[6]*leaf.position.y + matrix.values[10]*leaf.position.z + matrix.values[14]};
+        if (point.x < -7 || point.x > 7 || point.z < -7 || point.z > 3 || point.y < 0.6 || point.y > 7.4)
+            continue;
+        seed = seed * 1664525U + 1013904223U;
+        if (seed % 41U != 0)
+            continue;
+        const float random = static_cast<float>(seed & 65535U) / 65536;
+        const float radius = 0.022F + 0.026F * random;
+        Instance pearl{};
+        pearl.transform.values = {radius,0,0,0, 0,radius,0,0, 0,0,radius,0,
+                                  static_cast<float>(point.x),static_cast<float>(point.y),static_cast<float>(point.z),1};
+        pearl.color = {0.5F,0.7F,0.65F,1};
+        pearl.behavior = {15, random * 37, 0.65F + random * 0.35F, -1};
+        // Leaf vertex and parent instance remain references, so plant edits and
+        // the exact upstream strand deformation carry the attached pearl with them.
+        pearl.anatomy = {static_cast<float>(index), static_cast<float>(parent), radius, 24 + random * 19};
+        objects.push_back({static_cast<std::uint32_t>(objects.size() + 1), ObjectKind::bubble,
+                           MeshKind::imported, static_cast<std::uint32_t>(instances.size()),
+                           point, radius, -1});
+        instances.push_back(pearl);
+        ++pearls.instance_count;
+        ++per_plant[parent];
+    }
+    if (pearls.instance_count > 0)
+        batches.push_back(pearls);
     vertices_ = std::move(vertices);
     indices_ = std::move(indices);
     instances_ = std::move(instances);

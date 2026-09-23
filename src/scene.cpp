@@ -121,6 +121,50 @@ Vec3 actor_position(const Actor& actor, double time) {
                       actor.center.z + actor.cruise.x * 0.25 * (std::cos(angle) - 1)};
     return result;
 }
+Matrix leaf_bubble_transform(const Instance& bubble, const Vertex& leaf,
+                             const Instance& parent, double time) {
+    const double age = std::fmod(time + bubble.behavior.y, bubble.anatomy.w);
+    const double hold = bubble.anatomy.w - 6, released = std::max(0.0, age - hold);
+    const double growth = std::clamp(age / hold, 0.0, 1.0);
+    double radius = bubble.anatomy.z * (0.35 + 0.65 * growth * growth * (3 - 2 * growth));
+    const double t = time - released, x = leaf.anchor.x, z = leaf.anchor.z;
+    const double strength = 0.34 * std::sin(t * 0.031) + 0.15 * std::sin(t * 0.055 - x * 0.34 - z * 0.19) +
+        0.03 * std::sin(t * 0.235 + x * 1.7 + z * 1.1) + 0.03 * std::sin(t * 0.155 + x * 0.6 - z * 2.3);
+    // Match the single-precision shader seed before using double for the geometry query.
+    const float seed_value = std::sin(leaf.anchor.x * 12.9898F + leaf.anchor.z * 78.233F) * 43758.5453F;
+    const double seed = seed_value - std::floor(seed_value);
+    const double phase = seed * 6.2832 + x * 0.9;
+    const double distance = std::max(0.0001, static_cast<double>(leaf.along.w));
+    const double drag = leaf.bend.w * (leaf.bend.x + 0.22 * leaf.bend.z) / std::sqrt(1.0484) * strength;
+    const double saturation = 1 + 0.06 * leaf.along.w * leaf.along.w;
+    const double gain = leaf.bend.w * (0.012 + 0.02 * strength);
+    const double power = std::pow(distance, 0.3);
+    const double theta = t * 0.95 - 1.05 * leaf.along.w + phase;
+    const double ripple = t * 1.55 - 1.7 * leaf.along.w + phase * 2.3;
+    const double shape = std::sin(theta) + 0.3 * std::sin(ripple);
+    const double motion = drag * 0.09 * leaf.along.w * leaf.along.w / saturation + gain * distance * power * shape;
+    const double slope = drag * 0.18 * leaf.along.w / (saturation * saturation) +
+        gain * 1.3 * power * shape - gain * distance * power * (1.05 * std::cos(theta) + 0.51 * std::cos(ripple));
+    const double bend_normal = leaf.bend.x * leaf.normal.x + leaf.bend.y * leaf.normal.y + leaf.bend.z * leaf.normal.z;
+    Vec3 normal = normalized({leaf.normal.x - leaf.along.x * slope * bend_normal,
+                              leaf.normal.y - leaf.along.y * slope * bend_normal,
+                              leaf.normal.z - leaf.along.z * slope * bend_normal});
+    if (normal.y > 0)
+        normal = {-normal.x, -normal.y, -normal.z};
+    const Vec3 local{leaf.position.x + leaf.bend.x * motion + normal.x * radius * 0.85,
+                     leaf.position.y + leaf.bend.y * motion + normal.y * radius * 0.85,
+                     leaf.position.z + leaf.bend.z * motion + normal.z * radius * 0.85};
+    const Matrix& m = parent.transform;
+    Vec3 world{m.values[0]*local.x + m.values[4]*local.y + m.values[8]*local.z + m.values[12],
+               m.values[1]*local.x + m.values[5]*local.y + m.values[9]*local.z + m.values[13],
+               m.values[2]*local.x + m.values[6]*local.y + m.values[10]*local.z + m.values[14]};
+    world.y += released * bubble.behavior.z;
+    world.x += 0.07 * released * std::sin(released * 2 + bubble.behavior.y);
+    world.z += released * 0.025;
+    const double fade = std::clamp((released - 5.4) / 0.6, 0.0, 1.0);
+    radius = std::max(0.00001, radius * (1 - fade * fade * (3 - 2 * fade)));
+    return transform(world, {radius, radius * 0.9, radius}, 0);
+}
 Scene::Scene() {
     vertices_.reserve(7000);
     indices_.reserve(35000);
@@ -290,12 +334,12 @@ void Scene::build_habitat() {
                  static_cast<float>(random.range(0.1, 0.4)), -1});
         }
     }
-    for (std::size_t index = 0; index < 30; ++index) {
-        const double x = 7.6 + random.range(-0.32, 0.32), z = -1.8 + random.range(-0.3, 0.3),
-                     size = random.range(0.015, 0.048);
-        add(ObjectKind::bubble, MeshKind::sphere, {x, 0, z}, {size, size, size}, 0,
+    for (std::size_t index = 0; index < 84; ++index) {
+        const double x = 3.5 + random.range(-0.22, 0.22), z = -1.2 + random.range(-0.35, 0.35),
+                     size = random.range(0.022, 0.065);
+        add(ObjectKind::bubble, MeshKind::sphere, {x, 0.2, z}, {size, size * 0.86, size}, 0,
             {0.45F, 0.73F, 0.68F, 1},
-            {3, static_cast<float>(random.range(0, 10)), static_cast<float>(random.range(0.7, 1.5)),
+            {3, static_cast<float>(random.range(0, 10)), static_cast<float>(random.range(0.85, 1.9)),
              -1});
     }
 }
@@ -384,6 +428,15 @@ void Scene::compile_batches() {
     instances_ = std::move(ordered);
 }
 TapResult Scene::tap(double x, double y, double aspect, double time) {
+    return disturb(x, y, aspect, time, 0.20, 1.0, false);
+}
+TapResult Scene::pointer_motion(double x, double y, double aspect, double time, double speed) {
+    if (!std::isfinite(speed) || speed < 0.12)
+        return {};
+    return disturb(x, y, aspect, time, 0.105, std::clamp(speed * 0.38, 0.12, 0.55), true);
+}
+TapResult Scene::disturb(double x, double y, double aspect, double time, double radius,
+                        double strength, bool pointer) {
     TapResult result{};
     if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(time) || !std::isfinite(aspect) ||
         aspect <= 0)
@@ -393,10 +446,13 @@ TapResult Scene::tap(double x, double y, double aspect, double time) {
         const Vec3 p = actor_position(actor, time), screen = project(p, aspect);
         const double dx = (screen.x - x) * aspect, dy = screen.y - y,
                      separation = std::hypot(dx, dy);
-        if (screen.z < 0 || separation > 0.20)
+        if (pointer && (actor.traits.x > 0.5F || p.z < -12 ||
+                        (actor.escape.w > 0 && time - actor.startled_from.w < 2.5)))
             continue;
-        const double intensity = 1 - separation / 0.20, sign = dx >= 0 ? 1.0 : -1.0;
-        const double flight = (actor.traits.x > 0.5F ? 0.5 : 2.5) * (0.5 + intensity);
+        if (screen.z < 0 || separation > radius)
+            continue;
+        const double intensity = (1 - separation / radius) * strength, sign = dx >= 0 ? 1.0 : -1.0;
+        const double flight = (actor.traits.x > 0.5F ? 0.5 : 2.5) * (0.5 * strength + intensity);
         Vec3 destination{std::clamp(p.x + sign * flight, -9.0, 9.0), p.y, p.z};
         if (actor.traits.x < 0.5F) {
             destination.y = std::clamp(p.y + 0.5 * intensity, 0.8, 7.5);
@@ -428,6 +484,8 @@ bool Scene::move_object(std::uint32_t identity, Vec3 position) {
     if (object.actor >= 0 || object.kind == ObjectKind::sand)
         return false;
     Instance& instance = instances_[object.instance_index];
+    if (instance.behavior.x == 15)
+        return false; // A leaf pearl is owned by its referenced plant.
     const Vec3 previous{instance.transform.values[12], instance.transform.values[13],
                         instance.transform.values[14]};
     const Vec3 delta{position.x - object.center.x, position.y - object.center.y,
@@ -475,9 +533,20 @@ QueryHit Scene::query(const Ray& ray, double time) const {
             radius = (radius + 0.08) * scale;
         } else if (object.kind == ObjectKind::bubble) {
             const Instance& instance = instances_[object.instance_index];
+            if (instance.behavior.x == 15) {
+                const Matrix matrix = leaf_bubble_transform(instance,
+                    vertices_[static_cast<std::size_t>(instance.anatomy.x)],
+                    instances_[static_cast<std::size_t>(instance.anatomy.y)], time);
+                center = {matrix.values[12], matrix.values[13], matrix.values[14]};
+                radius = matrix.values[0];
+            } else {
             const double height = std::fmod(time * instance.behavior.z + instance.behavior.y, 10.0);
             center.y += height;
-            center.x += 0.1 * std::sin(height * 2 + instance.behavior.y);
+            center.x += (0.025 + 0.018 * height) * std::sin(height * 2.1 + instance.behavior.y) +
+                        0.04 * height;
+            center.z += 0.08 * std::sin(height * 1.7 + instance.behavior.y * 2);
+            radius *= 1 + 0.018 * height;
+            }
         }
         const Vec3 offset = subtract(ray.origin, center);
         const double b = dot(offset, ray.direction), c = dot(offset, offset) - radius * radius,

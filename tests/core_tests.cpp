@@ -99,6 +99,20 @@ void scene_contract() {
     const stillwater::QueryHit hit = scene.query({{at.x, at.y, at.z + 4}, {0, 0, -1}}, 10);
     require(hit.found && hit.distance >= 0, "scene supports broad-phase spatial queries");
 }
+void pointer_contract() {
+    stillwater::Scene scene{};
+    const stillwater::Vec3 p = stillwater::actor_position(scene.actors()[8], 10);
+    const stillwater::Vec3 screen = stillwater::project(p, 1.6);
+    require(scene.pointer_motion(screen.x, screen.y, 1.6, 10, 0.01).count == 0,
+            "slow or resting hand does not repeatedly frighten fish");
+    const stillwater::TapResult response = scene.pointer_motion(screen.x, screen.y, 1.6, 10, 1);
+    require(response.count > 0, "nearby fish respond to a moving hand");
+    require(scene.pointer_motion(screen.x, screen.y, 1.6, 10.1, 1).count == 0,
+            "pointer response has a cooldown instead of restarting flight every frame");
+    require(scene.pointer_motion(screen.x, screen.y, 1.6, 11,
+            std::numeric_limits<double>::quiet_NaN()).count == 0, "invalid pointer speed rejected");
+    require(scene.statistics().geometry_builds == 1, "pointer response retains geometry");
+}
 void habitat_contract() {
     stillwater::Scene scene{};
     std::string error{};
@@ -127,6 +141,32 @@ void habitat_contract() {
                     "each foliage vertex addresses its retained plant");
         }
     }
+    std::size_t pearls = 0;
+    for (const stillwater::Instance& pearl : scene.instances()) {
+        if (pearl.behavior.x != 15)
+            continue;
+        ++pearls;
+        const std::size_t leaf_index = static_cast<std::size_t>(pearl.anatomy.x);
+        const std::size_t parent_index = static_cast<std::size_t>(pearl.anatomy.y);
+        require(leaf_index < scene.vertices().size() && parent_index < scene.instances().size(),
+                "leaf pearl references retained source geometry");
+        const stillwater::Vertex& leaf = scene.vertices()[leaf_index];
+        stillwater::Instance parent = scene.instances()[parent_index];
+        require(parent.behavior.x == 10, "pearl attaches to a real plant");
+        const stillwater::Matrix original = stillwater::leaf_bubble_transform(pearl, leaf, parent, 8);
+        parent.transform.values[12] += 2;
+        const stillwater::Matrix translated = stillwater::leaf_bubble_transform(pearl, leaf, parent, 8);
+        require(std::abs(translated.values[12] - original.values[12] - 2) < 1e-5F,
+                "parent edits carry attached bubbles without rebuilding geometry");
+        for (const float value : original.values)
+            require(std::isfinite(value), "pearl deformation stays finite");
+        const double release = pearl.anatomy.w - 6 - pearl.behavior.y + pearl.anatomy.w;
+        const stillwater::Matrix just_before = stillwater::leaf_bubble_transform(pearl, leaf, parent, release - 1e-5);
+        const stillwater::Matrix just_after = stillwater::leaf_bubble_transform(pearl, leaf, parent, release + 1e-5);
+        require(std::abs(just_before.values[13] - just_after.values[13]) < 0.0001F,
+                "leaf attachment joins a rising bubble continuously");
+    }
+    require(pearls >= 60 && pearls <= 144, "leaf pearling has a bounded shared-mesh budget");
     const std::vector<stillwater::Instance> before = scene.instances();
     const stillwater::Vertex* vertices = scene.vertices().data();
     const stillwater::Vec3 destination{1, 2, 3};
@@ -175,13 +215,30 @@ void sound_contract() {
     }
     require(energy > 1, "ambient sound has signal");
     require(std::abs(ambience.stereo[0] - ambience.stereo[ambience.stereo.size() - 2]) < 1e-7F,
-            "ambient loop joins without sample jump");
+            "preview export fades at both ends");
+    stillwater::Ambience whole{}, blocked{};
+    std::vector<float> reference(22050U * 4U), chunks(reference.size());
+    whole.render(reference);
+    for (std::size_t offset = 0; offset < chunks.size();) {
+        const std::size_t count = std::min<std::size_t>(514, chunks.size() - offset);
+        blocked.render(std::span<float>(chunks.data() + offset, count));
+        offset += count;
+    }
+    require(reference == chunks, "continuous audio is independent of callback block boundaries");
+    const double rms = std::sqrt(energy / static_cast<double>(ambience.stereo.size()));
+    require(rms > 0.001 && rms < 0.015, "ambient level remains subdued");
+    double repeat_error = 0;
+    for (std::size_t index = 22050U * 2U; index < 22050U * 4U; ++index) {
+        const double difference = ambience.stereo[index] - ambience.stereo[index + 16U * 22050U * 2U];
+        repeat_error += difference * difference;
+    }
+    require(repeat_error > 0.01, "water no longer repeats the old sixteen-second phrase");
     for (std::size_t index = 0; index < left.stereo.size(); index += 2) {
         require(left.stereo[index + 1] == 0 && right.stereo[index] == 0,
                 "pan isolates selected channel");
         require(left.stereo[index] == right.stereo[index + 1], "pan preserves tap waveform");
-        require(std::isfinite(left.stereo[index]) && std::abs(left.stereo[index]) < 1,
-                "tap does not clip");
+        require(std::isfinite(left.stereo[index]) && std::abs(left.stereo[index]) < 0.025,
+                "tap stays close to ambience instead of a loud metallic knock");
     }
     require(left.stereo.front() == 0 && left.stereo[left.stereo.size() - 2] == 0,
             "tap endpoints are silent");
@@ -192,6 +249,7 @@ int main() {
     static_assert(sizeof(stillwater::Instance) == 112);
     static_assert(sizeof(stillwater::Actor) == 80);
     scene_contract();
+    pointer_contract();
     habitat_contract();
     sound_contract();
     std::cout << "Retained scene, local interaction, geometry bounds and audio contracts passed.\n";

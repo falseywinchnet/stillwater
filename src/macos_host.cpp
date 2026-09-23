@@ -24,14 +24,17 @@ struct Host {
     Renderer renderer{};
     Audio audio{};
     id app{nil}, window{nil}, view{nil}, layer{nil}, delegate{nil}, status{nil};
-    id pause_item{nil}, sound_item{nil}, desktop_item{nil}, tap_item{nil};
+    id pause_item{nil}, sound_item{nil}, desktop_item{nil}, pointer_item{nil};
     dispatch_source_t frames{nullptr}, quit_timer{nullptr};
     Clock::time_point began{Clock::now()};
     double paused_time{}, pause_started{};
-    bool paused{}, occluded{}, sleeping{}, tap_mode{}, audio_ready{}, quitting{}, captured{},
+    bool paused{}, occluded{}, sleeping{}, pointer_mode{true}, audio_ready{}, quitting{}, captured{},
         smoke_tapped{}, renderer_failed{};
     double width{1100}, height{700};
-    std::uint64_t taps{};
+    std::uint64_t taps{}, pointer_reactions{};
+    CGPoint last_pointer{};
+    double pointer_time{};
+    bool pointer_valid{};
     double wall_time() const {
         return std::chrono::duration<double>(Clock::now() - began).count();
     }
@@ -75,7 +78,7 @@ void resize_scene() {
 void update_menu() {
     Host& state = *host;
     const char* title = state.options.desktop
-                            ? (state.tap_mode ? "Stillwater — Desktop taps enabled"
+                            ? (state.pointer_mode ? "Stillwater — Interactive desktop"
                                               : "Stillwater — Desktop background")
                             : "Stillwater";
     const std::string window_title = std::string(title) + (state.paused ? " — Paused" : "");
@@ -84,7 +87,7 @@ void update_menu() {
                "setTitle:", string(state.paused ? "Resume the aquarium" : "Pause the aquarium"));
     send<void>(state.sound_item, "setState:", state.audio.enabled() ? 1L : 0L);
     send<void>(state.desktop_item, "setState:", state.options.desktop ? 1L : 0L);
-    send<void>(state.tap_item, "setState:", state.tap_mode ? 1L : 0L);
+    send<void>(state.pointer_item, "setState:", state.pointer_mode ? 1L : 0L);
 
 }
 void apply_placement() {
@@ -94,16 +97,13 @@ void apply_placement() {
         send<void>(state.window, "setStyleMask:", 128UL);
         send<void>(
             state.window, "setLevel:",
-            static_cast<long>(CGWindowLevelForKey(state.tap_mode ? kCGDesktopIconWindowLevelKey
-                                                                 : kCGDesktopWindowLevelKey) +
-                              1));
+            static_cast<long>(CGWindowLevelForKey(kCGDesktopWindowLevelKey) + 1));
         send<void>(state.window, "setCollectionBehavior:", 1UL | 16UL | 64UL);
         send<void>(state.window, "setFrame:display:", screen, static_cast<BOOL>(YES));
         send<void>(state.window,
-                   "setIgnoresMouseEvents:", static_cast<BOOL>(state.tap_mode ? NO : YES));
+                   "setIgnoresMouseEvents:", static_cast<BOOL>(YES));
         send<void>(state.window, "orderFrontRegardless");
     } else {
-        state.tap_mode = false;
         send<void>(state.window, "setStyleMask:", 15UL | 128UL);
         send<void>(state.window, "setLevel:", 0L);
         send<void>(state.window, "setCollectionBehavior:", 0UL);
@@ -117,6 +117,7 @@ void apply_placement() {
                    static_cast<BOOL>(YES));
         send<void>(state.window, "orderFrontRegardless");
     }
+    state.pointer_valid = false;
     // The aquarium remains nonactivating; controls live in the menu bar.
     resize_scene();
     update_menu();
@@ -183,6 +184,7 @@ void print_metrics() {
            << ",\n  \"fixed_camera_draws\": " << render.fixed_camera_draws
            << ",\n  \"moving_camera_draws\": " << render.moving_camera_draws
            << ",\n  \"actor_edits\": " << scene.actor_edits << ",\n  \"taps\": " << state.taps
+           << ",\n  \"pointer_reactions\": " << state.pointer_reactions
            << ",\n  \"paused\": " << (state.paused ? "true" : "false")
            << ",\n  \"desktop\": " << (state.options.desktop ? "true" : "false")
            << ",\n  \"menu_bar_visible\": " << (send<BOOL>(state.status, "isVisible") ? "true" : "false")
@@ -250,10 +252,10 @@ void toggle_desktop(id, SEL, id) {
     (*host).options.desktop = !(*host).options.desktop;
     apply_placement();
 }
-void toggle_tap(id, SEL, id) {
-    (*host).options.desktop = true;
-    (*host).tap_mode = !(*host).tap_mode;
-    apply_placement();
+void toggle_pointer(id, SEL, id) {
+    (*host).pointer_mode = !(*host).pointer_mode;
+    (*host).pointer_valid = false;
+    update_menu();
 }
 void show_preview(id, SEL, id) {
     (*host).options.desktop = false;
@@ -293,6 +295,66 @@ void mouse_down(id, SEL, id event) {
     const CGPoint point = send<CGPoint>(event, "locationInWindow");
     tap_at(point.x / (*host).width, point.y / (*host).height);
 }
+// Query position only while the visible aquarium animates. Never intercept,
+// consume, or replay Finder events; no global event monitor or event tap.
+bool exposed_pointer(CGPoint point) {
+    const CGWindowID own = static_cast<CGWindowID>(send<long>((*host).window, "windowNumber"));
+    CFArrayRef windows = CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenAboveWindow, own);
+    if (windows == nullptr)
+        return false;
+    const CGRect primary = CGDisplayBounds(CGMainDisplayID());
+    const CGPoint quartz = CGPointMake(point.x, primary.size.height - point.y);
+    bool exposed = true;
+    for (CFIndex index = 0; index < CFArrayGetCount(windows); ++index) {
+        CFDictionaryRef entry = static_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(windows, index));
+        CFNumberRef layer_number = static_cast<CFNumberRef>(CFDictionaryGetValue(entry, kCGWindowLayer));
+        CFNumberRef alpha_number = static_cast<CFNumberRef>(CFDictionaryGetValue(entry, kCGWindowAlpha));
+        int layer = 0;
+        double alpha = 1;
+        if (layer_number != nullptr)
+            CFNumberGetValue(layer_number, kCFNumberIntType, &layer);
+        if (alpha_number != nullptr)
+            CFNumberGetValue(alpha_number, kCFNumberDoubleType, &alpha);
+        // Finder's desktop icon layer must remain usable; normal app windows,
+        // Dock and menus suppress reactions under their rectangular bounds.
+        if (layer < 0 || alpha < 0.01)
+            continue;
+        CFDictionaryRef bounds = static_cast<CFDictionaryRef>(CFDictionaryGetValue(entry, kCGWindowBounds));
+        CGRect rectangle{};
+        if (bounds != nullptr && CGRectMakeWithDictionaryRepresentation(bounds, &rectangle) &&
+            CGRectContainsPoint(rectangle, quartz)) {
+            exposed = false;
+            break;
+        }
+    }
+    CFRelease(windows);
+    return exposed;
+}
+void sample_pointer() {
+    Host& state = *host;
+    if (!state.pointer_mode || !state.options.verify_retained.empty())
+        return;
+    const double time = state.scene_time();
+    const double elapsed = time - state.pointer_time;
+    if (elapsed < 0.12)
+        return;
+    const CGPoint screen = send<CGPoint>(type("NSEvent"), "mouseLocation");
+    const CGPoint window = send<CGPoint>(state.window, "convertPointFromScreen:", screen);
+    const CGPoint point = send<CGPoint>(state.view, "convertPoint:fromView:", window, nil);
+    const double speed = state.pointer_valid ?
+        std::hypot(point.x - state.last_pointer.x, point.y - state.last_pointer.y) /
+        (state.height * elapsed) : 0;
+    state.last_pointer = point;
+    state.pointer_time = time;
+    state.pointer_valid = point.x >= 0 && point.y >= 0 &&
+                          point.x < state.width && point.y < state.height;
+    if (!state.pointer_valid || speed < 0.12 || elapsed > 0.5 || !exposed_pointer(screen))
+        return;
+    const TapResult result = state.scene.pointer_motion(point.x / state.width,
+        point.y / state.height, state.width / state.height, time, speed);
+    state.pointer_reactions += result.count;
+}
 void sleeping(id, SEL, id) {
     (*host).sleeping = true;
     stop_source((*host).frames);
@@ -318,6 +380,7 @@ void frame(void*) {
     Host& state = *host;
     if (state.quitting || state.paused || state.sleeping || state.occluded)
         return;
+    sample_pointer();
     if (state.options.smoke_tap && !state.smoke_tapped && state.scene_time() > 2) {
         const Vec3 position = actor_position(state.scene.actors()[7], state.scene_time());
         const Vec3 screen = project(position, state.width / state.height);
@@ -372,10 +435,10 @@ void install_menu(Host& state) {
     send<void>(menu, "addItem:", send<id>(type("NSMenuItem"), "separatorItem"));
     state.desktop_item = menu_item(menu, state.delegate, "On the desktop", "toggleDesktop:");
     menu_item(menu, state.delegate, "Open aquarium window", "showPreview:");
-    state.tap_item = menu_item(menu, state.delegate, "Allow desktop taps", "toggleTap:");
+    state.pointer_item = menu_item(menu, state.delegate, "Fish react to pointer", "togglePointer:");
     state.pause_item = menu_item(menu, state.delegate, "Pause the aquarium", "togglePause:");
     state.sound_item =
-        menu_item(menu, state.delegate, "Pump, bubbles and glass taps", "toggleSound:");
+        menu_item(menu, state.delegate, "Aquarium sound", "toggleSound:");
     send<void>(menu, "addItem:", send<id>(type("NSMenuItem"), "separatorItem"));
     menu_item(menu, state.delegate, "Quit Stillwater", "quit:");
     id bar = send<id>(type("NSStatusBar"), "systemStatusBar");
@@ -401,7 +464,7 @@ int run_macos(const Options& options) {
     method(delegate_class, "togglePause:", &toggle_pause, "v@:@");
     method(delegate_class, "toggleSound:", &toggle_sound, "v@:@");
     method(delegate_class, "toggleDesktop:", &toggle_desktop, "v@:@");
-    method(delegate_class, "toggleTap:", &toggle_tap, "v@:@");
+    method(delegate_class, "togglePointer:", &toggle_pointer, "v@:@");
     method(delegate_class, "showPreview:", &show_preview, "v@:@");
     method(delegate_class, "quit:", &quit_action, "v@:@");
     method(delegate_class, "windowDidResize:", &resized, "v@:@");
@@ -440,7 +503,7 @@ int run_macos(const Options& options) {
     send<void>(state.view, "setAccessibilityElement:", static_cast<BOOL>(YES));
     send<void>(state.view, "setAccessibilityRole:", string("AXImage"));
     send<void>(state.view, "setAccessibilityLabel:",
-               string("Aquarium. Click to tap the glass. Controls are in the Stillwater menu bar menu."));
+               string("Aquarium. Move the pointer near fish to interact. Desktop clicks pass through. Click the preview to tap the glass. Controls are in the Stillwater menu bar menu."));
     state.layer = apple::make("CAMetalLayer");
     send<void>(state.layer, "setOpaque:", static_cast<BOOL>(YES));
     send<void>(state.view, "setLayer:", state.layer);

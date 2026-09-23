@@ -24,7 +24,9 @@ struct Out {
     uint identity [[flat]];
 };
 float3 water_color(float2 uv) {
-    return float3(0.0055f,0.023f,0.015f) * (0.82f+0.18f*uv.y);
+    // Broad overhead illumination, with a darker blue-green lower water column.
+    float height=smoothstep(0.0f,1.0f,uv.y);
+    return mix(float3(0.0025f,0.009f,0.010f),float3(0.008f,0.029f,0.023f),height);
 }
 float3 prototype_water_color(float2 uv) {
     float light=exp(-pow((uv.x-0.29f)*2.2f,2.0f)-pow((uv.y-0.93f)*2.4f,2.0f));
@@ -71,6 +73,23 @@ float2 strand_motion(float3 root, float3 direction, float distance, float compli
     float shape=sin(theta)+0.3f*sin(ripple);
     return float2(amount+envelope*shape,slope+envelope_slope*shape-envelope*(1.05f*cos(theta)+0.51f*cos(ripple)));
 }
+Instance pearl_transform(Instance bubble,Vertex leaf,Instance parent,float time) {
+    float age=fmod(time+bubble.behavior.y,bubble.anatomy.w);
+    float hold=bubble.anatomy.w-6, released=max(0.0f,age-hold);
+    float radius=bubble.anatomy.z*(0.35f+0.65f*smoothstep(0.0f,hold,age));
+    float2 motion=strand_motion(leaf.anchor.xyz,leaf.bend.xyz,leaf.along.w,leaf.bend.w,time-released);
+    float3 normal=normalize(leaf.normal.xyz-leaf.along.xyz*(motion.y*dot(leaf.bend.xyz,leaf.normal.xyz)));
+    if(normal.y>0) normal=-normal;
+    float3 local=leaf.position.xyz+leaf.bend.xyz*motion.x+normal*radius*0.85f;
+    float3 world=(parent.transform*float4(local,1)).xyz;
+    world.y+=released*bubble.behavior.z;
+    world.x+=0.07f*released*sin(released*2+bubble.behavior.y);
+    world.z+=released*0.025f;
+    radius*=1-smoothstep(5.4f,6.0f,released);
+    radius=max(radius,0.00001f);
+    bubble.transform=float4x4(float4(radius,0,0,0),float4(0,radius*0.9f,0,0),float4(0,0,radius,0),float4(world,1));
+    return bubble;
+}
 Out prepare(Vertex sample,Instance instance,constant Actor* actors,constant Uniforms& u) {
     float3 p=sample.position.xyz,n=sample.normal.xyz;float time=u.clock.x;
     const int material=int(instance.behavior.x+0.5f);
@@ -98,7 +117,7 @@ Out prepare(Vertex sample,Instance instance,constant Actor* actors,constant Unif
         p.z+=height*height*(0.4f+0.25f*sin(time*0.7f+instance.behavior.y+height*2));
         n=normalize(float3(-height*instance.behavior.z*0.3f,0.12f,1));
     }
-    if(instance.anatomy.x==1) {
+    if(material!=15 && instance.anatomy.x==1) {
         // Tail fan grows backward from its attachment, with a true oscillating joint.
         p=float3(-p.y,p.x,p.z*0.5f);
         p=rotate_y(p,sin(time*6+instance.behavior.w)*0.45f);
@@ -110,7 +129,11 @@ Out prepare(Vertex sample,Instance instance,constant Actor* actors,constant Unif
     n=normalize(basis*(n/max(scale2,float3(0.00001f))));
     if(material==3) {
         float height=fmod(time*instance.behavior.z+instance.behavior.y,10.0f);
-        world.y+=height;world.x+=0.10f*sin(height*2+instance.behavior.y);
+        float3 center=instance.transform[3].xyz;
+        world=center+(world-center)*(1+0.018f*height);
+        world.y+=height;
+        world.x+=(0.025f+0.018f*height)*sin(height*2.1f+instance.behavior.y)+0.04f*height;
+        world.z+=0.08f*sin(height*1.7f+instance.behavior.y*2);
     }
     if(instance.behavior.w>=0) {
         Actor actor=actors[int(instance.behavior.w)];
@@ -136,14 +159,20 @@ vertex Out tank_vertex(uint vertex_id [[vertex_id]],uint instance_id [[instance_
                        constant Actor* actors [[buffer(2)]],constant Uniforms& u [[buffer(3)]]) {
     Vertex sample=vertices[vertex_id];
     uint index=sample.binding.y>0.5f ? uint(sample.binding.x) : instance_id;
-    Out out=prepare(sample,instances[index],actors,u);out.identity=index+1;return out;
+    Instance instance=instances[index];
+    if(int(instance.behavior.x)==15)
+        instance=pearl_transform(instance,vertices[uint(instance.anatomy.x)],instances[uint(instance.anatomy.y)],u.clock.x);
+    Out out=prepare(sample,instance,actors,u);out.identity=index+1;return out;
 }
 vertex float4 shadow_vertex(uint vertex_id [[vertex_id]],uint instance_id [[instance_id]],
                             constant Vertex* vertices [[buffer(0)]],constant Instance* instances [[buffer(1)]],
                             constant Actor* actors [[buffer(2)]],constant Uniforms& u [[buffer(3)]]) {
     Vertex sample=vertices[vertex_id];
     uint index=sample.binding.y>0.5f ? uint(sample.binding.x) : instance_id;
-    Out out=prepare(sample,instances[index],actors,u);return out.light_position;
+    Out out=prepare(sample,instances[index],actors,u);
+    // Tiny air bubbles transmit light; avoid opaque bead shadows.
+    if(int(instances[index].behavior.x+0.5f)==3) return float4(2,2,2,1);
+    return out.light_position;
 }
 float hash(float3 p) { return fract(sin(dot(p,float3(127.1f,311.7f,74.7f)))*43758.5453f); }
 float noise(float3 p) {
@@ -183,6 +212,33 @@ float3 mapped_normal(float3 normal,float3 point,float2 uv,float3 sample,float st
     sample=sample*2-1;sample.xy*=strength;
     return normalize(tangent*scale*sample.x+bitangent*scale*sample.y+normal*sample.z);
 }
+// Detail and membrane formulas adapted from the upstream fish anatomy shader.
+float2 fish_scale_grid(float2 uv) {
+    float2 grid=uv*float2(34,11);
+    grid.y+=0.11f*sin(grid.x*0.62f+1.3f);
+    grid.x+=grid.y*0.24f+fmod(floor(grid.y),2.0f)*0.5f;
+    return grid;
+}
+float fish_detail_fade(float2 grid) {
+    return 1-smoothstep(0.42f,1.1f,max(fwidth(grid.x),fwidth(grid.y)));
+}
+float fish_scale_mask(Out in,float2 grid) {
+    float opercle=0.196f-0.03f*(1-pow(clamp((in.local.y+0.004f)/0.078f,-1.0f,1.0f),2.0f));
+    return smoothstep(-0.292f,-0.242f,in.local.x)*(1-smoothstep(-0.005f,0.011f,in.local.x-opercle))*
+        smoothstep(0.0f,0.11f,in.uv.y)*(1-smoothstep(0.90f,1.0f,in.uv.y))*fish_detail_fade(grid);
+}
+float fin_pigment(Out in) {
+    float caudal=1-step(1.5f,in.uv.z);
+    float pectoral=step(3.5f,in.uv.z)*(1-step(5.5f,in.uv.z));
+    float lobe=0.5f-0.5f*cos(12.56637f*in.uv.x);
+    return pow(1-smoothstep(0.34f,1.04f,in.uv.y),0.8f)*mix(1.0f,0.42f+0.58f*lobe,caudal)*mix(1.0f,0.26f,pectoral);
+}
+float fin_ribs(Out in) {
+    float part=in.uv.z;
+    float count=part<1.5f ? 18 : (part<2.5f ? 10 : (part<3.5f ? 22 : (part<5.5f ? 11 : 7)));
+    float phase=in.uv.x*count;
+    return pow(0.5f+0.5f*cos(6.283185f*phase),20.0f)*fish_detail_fade(float2(phase,in.uv.y));
+}
 float3 fish_skin(Out in) {
     float part=in.uv.z,band=clamp(in.uv.y,0.0f,1.0f),x=in.local.x;
     if(part<0.5f) {
@@ -200,12 +256,27 @@ float3 fish_skin(Out in) {
         skin=mix(skin,float3(0.05f,0.056f,0.046f),smoothstep(0.25f,0.33f,x)*0.82f);
         float opercle=0.196f-0.03f*(1-pow(clamp((in.local.y+0.004f)/0.078f,-1.0f,1.0f),2.0f));
         skin*=1-0.5f*exp(-pow((x-opercle)/0.0028f,2.0f));
+        float2 grid=fish_scale_grid(in.uv.xy);
+        float mask=fish_scale_mask(in,grid);
+        float rim=smoothstep(0.40f,0.50f,length((fract(grid)-0.5f)*float2(0.85f,1)));
+        skin*=1+(hash(float3(floor(grid),0))-0.5f)*0.06f*mask-rim*0.035f*mask;
+        float lateral=exp(-pow((band-mix(0.50f,0.43f,smoothstep(-0.28f,0.16f,x)))/0.020f,2.0f));
+        skin*=1-lateral*0.12f*fish_detail_fade(grid);
+        float gill=exp(-pow((x-0.178f)/0.026f,2.0f)-pow((band-0.66f)/0.16f,2.0f));
+        skin=mix(skin,float3(0.330f,0.098f,0.078f),gill*0.20f);
+        skin=mix(skin,float3(0.255f,0.080f,0.038f),(1-smoothstep(-0.292f,-0.240f,x))*0.60f);
+        float margin=x-opercle;
+        skin*=1+0.28f*exp(-pow((margin-0.008f)/0.005f,2.0f))*(1-smoothstep(0.84f,1.0f,band));
+        float cleft_y=mix(-0.0175f,-0.0035f,smoothstep(0.322f,0.3495f,x));
+        float cleft=exp(-pow((in.local.y-cleft_y)/0.003f,2.0f))*smoothstep(0.304f,0.322f,x);
+        skin=mix(skin,float3(0.040f,0.028f,0.024f),cleft*0.85f);
         return skin;
     }
     if(part<6.5f || part>11.5f) {
-        float ribs=pow(0.5f+0.5f*cos(in.uv.x*6.283185f*(part<1.5f ? 18 : 11)),12.0f);
-        float3 membrane=mix(float3(0.32f,0.20f,0.14f),float3(0.45f,0.035f,0.012f),smoothstep(0.2f,0.8f,in.uv.y));
-        return membrane*(0.65f+0.6f*ribs);
+        float3 membrane=mix(float3(0.135f,0.158f,0.142f),float3(0.400f,0.052f,0.020f),fin_pigment(in));
+        float pale=(step(2.5f,part)*(1-step(3.5f,part))+step(5.5f,part)*(1-step(6.5f,part)))*smoothstep(0.76f,0.98f,band);
+        membrane=mix(membrane,float3(0.4f,0.41f,0.38f),pale*0.7f);
+        return mix(membrane,membrane*0.68f+float3(0.088f,0.082f,0.072f),fin_ribs(in)*0.85f);
     }
     if(part<7.5f) return mix(float3(0.62f,0.6f,0.415f),float3(0.33f,0.30f,0.15f),in.uv.y);
     if(part<8.5f) return float3(0.0055f,0.0075f,0.0085f);
@@ -245,22 +316,32 @@ Surface riverscape_surface(Out in,texture2d<float> sand,texture2d<float> sand_no
         if(in.surface.y>=0.7f) alpha=edge>0.45f ? 0.5f : 0.75f;
     }
     if(material==11 || material==12) albedo=fish_skin(in);
-    if(material==12) alpha=0.55f+0.35f*(1-in.uv.w);
+    if(material==11 && in.uv.z<0.5f) {
+        float2 grid=fish_scale_grid(in.uv.xy),cell=fract(grid)-0.5f;
+        float relief=(1-smoothstep(0.15f,0.55f,length(cell*float2(0.9f,1))))*
+            (0.42f-cell.x*0.85f)*fish_scale_mask(in,grid)*0.00030f;
+        float3 dx=dfdx(in.world),dy=dfdy(in.world),rx=cross(dy,normal),ry=cross(normal,dx);
+        float determinant=dot(dx,rx);
+        if(abs(determinant)>1e-12f)
+            normal=normalize(abs(determinant)*normal-sign(determinant)*(dfdx(relief)*rx+dfdy(relief)*ry));
+    }
+    if(material==12) alpha=clamp(mix(0.90f,0.25f,smoothstep(0.06f,1.0f,in.uv.y))*
+        (1+fin_pigment(in)*0.65f+fin_ribs(in)*0.3f),0.15f,1.0f);
     return {normal,albedo,alpha};
 }
 struct LightingTerms { float3 base; float3 surface; float direct; float caustic; };
 LightingTerms fixed_lighting(Out in,Surface surface,constant Uniforms& u) {
     float3 n=surface.normal,albedo=surface.albedo;
     float3 light=normalize(float3(0,0.9138f,0.4061f));
-    float3 hemisphere=mix(float3(0.035f,0.028f,0.016f),float3(0.10f,0.13f,0.085f),n.y*0.5f+0.5f);
+    float3 hemisphere=mix(float3(0.025f,0.024f,0.020f),float3(0.10f,0.145f,0.12f),n.y*0.5f+0.5f);
     float3 base=albedo*hemisphere+albedo*float3(0.06f,0.085f,0.10f)*max(0.0f,dot(n,normalize(float3(1,5,10))));
     float direct=max(0.0f,dot(n,light));
     int material=int(in.behavior.x+0.5f);
     float caustic=material>=7 && material<=9 ? max(n.y,0.0f) : 0.0f;
     float depth=max(0.0f,length(u.eye.xyz-in.world)-16);
-    float fog=1-exp(-depth*depth*0.001156f);
+    float fog=1-exp(-depth*depth*0.00070f);
     float3 transmission=exp(-float3(0.030f,0.006f,0.016f)*depth)*(1-fog);
-    return {base*transmission+water_color(float2(0.5f))*fog,albedo*transmission,direct,caustic};
+    return {base*transmission+water_color(float2(0.5f,clamp(in.world.y/10,0.0f,1.0f)))*fog,albedo*transmission,direct,caustic};
 }
 float3 illuminate_fixed(LightingTerms terms,float3 world,constant Uniforms& u,float visible) {
     float2 q=world.xz*2;
@@ -414,7 +495,7 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
         return float4(illuminate_fixed(fixed_lighting(in,surface,u),in.world,u,visibility(in.light_position,shadow)),1);
     float3 light=normalize(float3(0,0.9138f,0.4061f)),view=normalize(u.eye.xyz-in.world);
     float direct=max(0.0f,dot(normal,light)),visibility_value=visibility(in.light_position,shadow)*u.illumination.x;
-    float3 hemisphere=mix(float3(0.035f,0.028f,0.016f),float3(0.10f,0.13f,0.085f),normal.y*0.5f+0.5f);
+    float3 hemisphere=mix(float3(0.025f,0.024f,0.020f),float3(0.10f,0.145f,0.12f),normal.y*0.5f+0.5f);
     float3 color=albedo*(hemisphere+float3(1.43f,1.39f,1.28f)*direct*visibility_value);
     color+=albedo*float3(0.06f,0.085f,0.10f)*max(0.0f,dot(normal,normalize(float3(1,5,10))));
     if(material==10) {
@@ -423,12 +504,28 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
         color+=albedo*float3(0.13f,0.20f,0.075f)*max(0.0f,dot(normal,normalize(float3(2,10,-4))));
     }
     if(material==11) {
+        float part=in.uv.z;
+        float reflector=part<0.5f ? smoothstep(0.07f,0.24f,in.uv.y)*(1-smoothstep(0.58f,0.92f,in.uv.y)) : 0;
         float3 reflected=reflect(-view,normal);
-        float reflector=smoothstep(0.07f,0.24f,in.uv.y)*(1-smoothstep(0.58f,0.92f,in.uv.y));
-        float strip=exp(-pow((reflected.y-0.6f)*3,2.0f));
-        color+=albedo*(0.25f+0.70f*strip)*reflector;
-        float shine=pow(max(dot(normal,normalize(light+view)),0.0f),70.0f);
-        color+=float3(0.7f,0.85f,0.85f)*shine*visibility_value;
+        float facing=clamp(dot(normal,view),0.0f,1.0f);
+        float fresnel=0.04f+0.96f*pow(1-facing,5.0f);
+        float2 grid=fish_scale_grid(in.uv.xy);
+        float mask=part<0.5f ? fish_scale_mask(in,grid) : 0;
+        float roughness=mix(0.34f,0.17f+hash(float3(floor(grid),0))*0.13f,mask);
+        float cornea=step(6.5f,part)*(1-step(8.5f,part));
+        roughness=mix(roughness,0.07f,cornea);
+        float shine=pow(max(dot(normal,normalize(light+view)),0.0f),2/(roughness*roughness));
+        // Bounded analytic environment reflection; no reflection texture/pass.
+        float sky=smoothstep(-0.5f,0.8f,reflected.y);
+        float3 environment=mix(float3(0.015f,0.035f,0.026f),float3(0.36f,0.45f,0.42f),sky);
+        float3 tint=mix(float3(0.72f,0.81f,0.77f),float3(0.22f,0.55f,0.68f),pow(1-facing,2.0f));
+        color*=1-reflector*0.30f;
+        color+=environment*tint*reflector*(0.30f+fresnel*0.45f);
+        color+=float3(0.62f,0.73f,0.67f)*shine*(0.12f+reflector*0.22f+cornea*0.55f)*visibility_value;
+        float path=max(abs(in.local.z)*2,0.012f);
+        float thin=(1-smoothstep(-0.08f,0.08f,in.local.x))*(1-reflector*0.65f);
+        color+=exp(-float3(34,84,109)*path)*(1-exp(-160*path))*thin*
+            (0.06f+0.20f*max(0.0f,dot(-normal,light)))*visibility_value;
     }
     if(material==7 || material==8 || material==9) {
         float2 q=in.world.xz*2;
@@ -439,8 +536,8 @@ float4 riverscape_fragment(Out in,constant Uniforms& u,depth2d<float> shadow,
     // Water absorption is shallow in the foreground; there is no rear-wall geometry.
     float range=length(u.eye.xyz-in.world),depth=max(0.0f,range-16);
     color*=exp(-float3(0.030f,0.006f,0.016f)*depth);
-    float fog=1-exp(-depth*depth*0.001156f);
-    color=mix(color,water_color(float2(0.5f,0.5f)),fog);
+    float fog=1-exp(-depth*depth*0.00070f);
+    color=mix(color,water_color(float2(0.5f,clamp(in.world.y/10,0.0f,1.0f))),fog);
     return float4(pow(aces(color),float3(1.0f/2.2f)),alpha);
 }
 
@@ -486,8 +583,14 @@ float4 shade_tank(Out in,constant Uniforms& u,depth2d<float> shadow,
         float caustic=pow(max(0.0f,1-abs(a)*1.8f),8.0f);
         color+=albedo*float3(0.25f,0.43f,0.27f)*caustic*max(n.y,0.0f)*shadow_factor*exp(-max(0.0f,7-in.world.y)*0.1f);
     }
-    if(material==3) {
-        float rim=pow(1-abs(dot(n,view)),3.0f);color=float3(0.08f,0.19f,0.18f)+rim*float3(0.4f,0.62f,0.56f)+specular*0.5f;
+    if(material==3 || material==15) {
+        // Air-water Fresnel rim and a small overhead reflection. Alpha-to-coverage
+        // leaves the center open; this is a thin-shell approximation, not refraction.
+        float rim=pow(1-abs(dot(n,view)),2.5f);
+        float glint=pow(max(0.0f,dot(n,normalize(view+float3(-0.3f,1,0.5f)))),64.0f);
+        float alpha=clamp(rim*0.80f+glint*0.95f,0.0f,0.95f);
+        if(alpha<0.12f) discard_fragment();
+        return float4(float3(0.40f,0.57f,0.53f)+glint*0.4f,alpha);
     }
     float range=length(u.eye.xyz-in.world);
     float3 attenuation=exp(-float3(0.038f,0.010f,0.018f)*range);

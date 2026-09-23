@@ -39,7 +39,7 @@ struct Uniforms {
 };
 bool moving_instance(const Instance& instance) {
     const int material = static_cast<int>(instance.behavior.x);
-    return instance.behavior.w >= 0 || material == 2 || material == 3 || material == 10;
+    return instance.behavior.w >= 0 || material == 2 || material == 3 || material == 10 || material == 15;
 }
 bool retained_instance(const Instance& instance) {
     const int material = static_cast<int>(instance.behavior.x);
@@ -870,6 +870,8 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
         const std::size_t conv_index = batch_index++;
         const Instance& instance = scene.instances()[batch.first_instance];
         const int material = static_cast<int>(instance.behavior.x);
+        if (pipeline == shadow_pipeline_ && material == 15)
+            continue;
         const bool moving = moving_instance(instance);
         if ((draw_set == DrawSet::fixed && moving) || (draw_set == DrawSet::moving && !moving))
             continue;
@@ -885,7 +887,7 @@ void Renderer::encode_geometry(id encoder, const Scene& scene, id pipeline, cons
         }
         if (pipeline == pipeline_ && specialize_foliage_)
             send<void>(encoder, "setRenderPipelineState:", material == 10 ? foliage_pipeline_ : pipeline_);
-        send<void>(encoder, "setFrontFacingWinding:", material >= 7 ? 1UL : 0UL);
+        send<void>(encoder, "setFrontFacingWinding:", material >= 7 && material != 15 ? 1UL : 0UL);
         // Imported rock shells and fish bodies are closed, outward-wound meshes.
         // Keep foliage, fins and all other materials two-sided.
         send<void>(encoder, "setCullMode:", (material == 8 || material == 11) ? 2UL : 0UL);

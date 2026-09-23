@@ -45,7 +45,7 @@ struct alignas(16) Instance {
     Matrix transform{};
     Float4 color{};
     Float4 behavior{}; // material, phase, sway, actor index (-1 if static)
-    Float4 anatomy{};  // joint type, joint side, reserved, reserved
+    Float4 anatomy{};  // joint type/side; leaf pearls: source vertex, parent instance, radius, period
 };
 struct alignas(16) Actor {
     Float4 center{};        // xyz and scale
@@ -88,6 +88,8 @@ Matrix multiply(const Matrix& left, const Matrix& right);
 Matrix perspective(double aspect);
 Matrix view_matrix();
 Vec3 actor_position(const Actor& actor, double time);
+Matrix leaf_bubble_transform(const Instance& bubble, const Vertex& leaf,
+                             const Instance& parent, double time);
 Vec3 project(Vec3 point, double aspect);
 double ground_height(double x, double z);
 
@@ -124,9 +126,12 @@ class Scene final {
     }
     bool move_object(std::uint32_t identity, Vec3 position);
     TapResult tap(double x, double y, double aspect, double time);
+    TapResult pointer_motion(double x, double y, double aspect, double time, double speed);
     QueryHit query(const Ray& ray, double time) const;
 
   private:
+    TapResult disturb(double x, double y, double aspect, double time, double radius,
+                      double strength, bool pointer);
     void build_geometry();
     void build_habitat();
     void build_animals();

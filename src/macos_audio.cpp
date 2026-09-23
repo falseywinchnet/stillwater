@@ -10,7 +10,6 @@ Audio::~Audio() {
         AudioQueueDispose(tap_queue_, true);
 }
 bool Audio::initialize() {
-    ambience_ = make_ambience();
     tap_sound_ = make_glass_tap(0);
     AudioStreamBasicDescription format{};
     format.mSampleRate = audio_sample_rate;
@@ -40,13 +39,7 @@ bool Audio::initialize() {
 void Audio::fill(AudioQueueBufferRef buffer) {
     float* output = static_cast<float*>((*buffer).mAudioData);
     constexpr std::size_t samples = 4096U * 2U;
-    std::size_t filled = 0;
-    while (filled < samples) {
-        const std::size_t count = std::min(samples - filled, ambience_.stereo.size() - cursor_);
-        std::memcpy(output + filled, ambience_.stereo.data() + cursor_, count * sizeof(float));
-        filled += count;
-        cursor_ = (cursor_ + count) % ambience_.stereo.size();
-    }
+    ambience_.render(std::span<float>(output, samples));
     (*buffer).mAudioDataByteSize = static_cast<UInt32>(samples * sizeof(float));
 }
 void Audio::refill(void* context, AudioQueueRef queue, AudioQueueBufferRef buffer) {
@@ -68,7 +61,7 @@ bool Audio::set_ambience(bool enabled) {
         enabled_ = false;
         return true;
     }
-    cursor_ = 0;
+    ambience_ = Ambience{};
     for (AudioQueueBufferRef buffer : buffers_) {
         fill(buffer);
         if (AudioQueueEnqueueBuffer(ambient_queue_, buffer, 0, nullptr) != noErr)

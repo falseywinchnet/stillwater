@@ -20,67 +20,135 @@ void write_u32(std::ofstream& stream, std::uint32_t value) {
     stream.write(bytes, 4);
 }
 } // namespace
-Sound make_ambience() {
-    constexpr std::size_t frames = audio_sample_rate * 16U;
-    Sound result{};
-    result.stereo.resize(frames * 2U);
-    std::uint32_t noise_state = 71137U;
-    double filtered = 0.0;
-    for (std::size_t index = 0; index < frames; ++index) {
-        const double time = static_cast<double>(index) / audio_sample_rate;
-        noise_state = noise_state * 1664525U + 1013904223U;
-        const double noise = static_cast<double>(noise_state) / 4294967295.0 - 0.5;
-        filtered = 0.965 * filtered + 0.035 * noise;
-        const double pump =
-            0.014 * std::sin(tau * 55.0 * time) + 0.006 * std::sin(tau * 110.0 * time);
-        const double water = 0.18 * filtered;
-        // Small rising resonances: a quiet air stone, with irregular event spacing.
-        double bubbles_left = 0.0;
-        double bubbles_right = 0.0;
-        for (unsigned int bubble = 0; bubble < 31; ++bubble) {
-            const double start = 0.13 + static_cast<double>(bubble) * 0.501 +
-                                 0.10 * std::sin(static_cast<double>(bubble) * 7.0);
-            const double age = time - start;
-            if (age < 0.0 || age > 0.15)
-                continue;
-            const double frequency = 440.0 + static_cast<double>((bubble * 173U) % 900U);
-            const double value = 0.027 * (1.0 - std::exp(-age * 700.0)) * std::exp(-age * 36.0) *
-                                 std::sin(tau * (frequency * age + 800.0 * age * age));
-            bubbles_left += value * (bubble % 2U == 0U ? 1.0 : 0.5);
-            bubbles_right += value * (bubble % 2U == 0U ? 0.5 : 1.0);
-        }
-        result.stereo[index * 2U] = static_cast<float>(pump + water + bubbles_left);
-        result.stereo[index * 2U + 1U] = static_cast<float>(pump + water * 0.9 + bubbles_right);
+double Ambience::random() {
+    random_state_ = random_state_ * 1664525U + 1013904223U;
+    return (static_cast<double>(random_state_) + 0.5) / 4294967296.0;
+}
+Ambience::Ambience() {
+    // A subdued 60 Hz motor/diaphragm character, strongest at 120 Hz, with
+    // cabinet-damped higher harmonics. An aesthetic model, not a pump recording.
+    constexpr std::array<double, 5> gains{0.0020, 0.0045, 0.0014, 0.0007, 0.0003};
+    for (std::size_t index = 0; index < motor_.size(); ++index) {
+        Resonance& mode = motor_[index];
+        const double step = tau * 60.0 * static_cast<double>(index + 1) / audio_sample_rate;
+        mode.coefficient = 2 * std::cos(step);
+        mode.current = std::sin(step);
+        mode.gain = gains[index];
     }
-    // Smoothly join the loop's noise state; periodic pump frequencies already match.
-    constexpr std::size_t blend_frames = 512;
-    for (std::size_t index = 0; index < blend_frames; ++index) {
-        const double amount = static_cast<double>(index) / static_cast<double>(blend_frames - 1);
-        for (std::size_t channel = 0; channel < 2; ++channel) {
-            const std::size_t destination = (frames - blend_frames + index) * 2U + channel;
-            const float target = result.stereo[channel];
-            result.stereo[destination] =
-                static_cast<float>((1.0 - amount) * result.stereo[destination] + amount * target);
+}
+void Ambience::bubble() {
+    for (Resonance& voice : bubbles_) {
+        if (voice.remaining != 0)
+            continue;
+        // Minnaert's shallow-water radius relation, f ~= 3.26/r(m).
+        // Each formation excites a short fixed resonance, never a musical sweep.
+        const double radius = 0.0007 + 0.0025 * std::pow(random(), 2);
+        const double frequency = 3.26 / radius;
+        const double damping = 75 + 180 * random();
+        const double step = tau * frequency / audio_sample_rate;
+        voice.decay = std::exp(-damping / audio_sample_rate);
+        voice.coefficient = 2 * voice.decay * std::cos(step);
+        voice.previous = 0;
+        voice.current = std::sin(step);
+        voice.gain = 0.003 + 0.009 * random() * random();
+        voice.pan = 0.25 + 0.40 * random();
+        voice.remaining = static_cast<unsigned int>(audio_sample_rate * 0.10);
+        break;
+    }
+    // Exponential waiting times, with slowly wandering flow density.
+    until_bubble_ = 1U + static_cast<unsigned int>(
+        -std::log(random()) * audio_sample_rate / (24 + 9 * flow_));
+}
+void Ambience::render(std::span<float> stereo) {
+    for (std::size_t index = 0; index + 1 < stereo.size(); index += 2) {
+        const double left_noise = 2 * random() - 1, right_noise = 2 * random() - 1;
+        flow_ += 0.000018 * (left_noise - flow_);
+        if (until_bubble_ == 0)
+            bubble();
+        --until_bubble_;
+        if (until_surface_ == 0) {
+            surface_ += 0.18 + 0.55 * random();
+            until_surface_ = 1U + static_cast<unsigned int>(
+                -std::log(random()) * audio_sample_rate * 0.65);
         }
+        --until_surface_;
+        surface_ *= 0.99935;
+        double bubbles_left = 0, bubbles_right = 0;
+        for (Resonance& voice : bubbles_) {
+            if (voice.remaining == 0)
+                continue;
+            const double value = voice.current * voice.gain;
+            bubbles_left += value * (1 - voice.pan);
+            bubbles_right += value * voice.pan;
+            const double next = voice.coefficient * voice.current -
+                                voice.decay * voice.decay * voice.previous;
+            voice.previous = voice.current;
+            voice.current = next;
+            --voice.remaining;
+        }
+        double pump = 0;
+        for (Resonance& mode : motor_) {
+            pump += mode.current * mode.gain;
+            const double next = mode.coefficient * mode.current - mode.previous;
+            mode.previous = mode.current;
+            mode.current = next;
+        }
+        motor_air_ += 0.025 * (left_noise - motor_air_);
+        water_left_ += 0.16 * (left_noise - water_left_);
+        water_right_ += 0.16 * (right_noise - water_right_);
+        water_low_left_ += 0.012 * (water_left_ - water_low_left_);
+        water_low_right_ += 0.012 * (water_right_ - water_low_right_);
+        bubble_left_ += 0.22 * (bubbles_left - bubble_left_);
+        bubble_right_ += 0.22 * (bubbles_right - bubble_right_);
+        const double water_gain = 0.006 + 0.012 * std::min(surface_, 1.5);
+        const double motor = pump * (1 + 0.08 * motor_air_) + 0.004 * motor_air_;
+        stereo[index] = static_cast<float>(fade_ * (motor + bubble_left_ +
+            water_gain * (water_left_ - water_low_left_)));
+        stereo[index + 1] = static_cast<float>(fade_ * (motor * 0.94 + bubble_right_ +
+            water_gain * (water_right_ - water_low_right_)));
+        fade_ = std::min(1.0, fade_ + 1.0 / (audio_sample_rate * 0.5));
+    }
+}
+Sound make_ambience() {
+    // A preview export only. Runtime streams the generator without repeating.
+    Sound result{};
+    result.stereo.resize(audio_sample_rate * 30U * 2U);
+    Ambience ambience{};
+    ambience.render(result.stereo);
+    constexpr std::size_t fade_frames = audio_sample_rate / 2U;
+    const std::size_t frames = result.stereo.size() / 2;
+    for (std::size_t index = 0; index < fade_frames; ++index) {
+        const float gain = static_cast<float>(fade_frames - index - 1) /
+                           static_cast<float>(fade_frames);
+        result.stereo[(frames - fade_frames + index) * 2] *= gain;
+        result.stereo[(frames - fade_frames + index) * 2 + 1] *= gain;
     }
     return result;
 }
 Sound make_glass_tap(double pan) {
     Sound result{};
-    constexpr std::size_t frames = audio_sample_rate * 3U / 5U;
+    constexpr std::size_t frames = audio_sample_rate / 5U;
     result.stereo.resize(frames * 2U);
     pan = std::clamp(pan, -1.0, 1.0);
     const double left = std::sqrt(0.5 * (1.0 - pan));
     const double right = std::sqrt(0.5 * (1.0 + pan));
+    std::uint32_t state = 29173U;
+    double contact = 0, low = 0;
     for (std::size_t index = 0; index < frames; ++index) {
         const double time = static_cast<double>(index) / audio_sample_rate;
-        const double attack = 1.0 - std::exp(-time * 6000.0);
-        const double body = 0.24 * std::exp(-time * 19.0) * std::sin(tau * 730.0 * time);
-        const double glass = 0.11 * std::exp(-time * 29.0) * std::sin(tau * 1931.0 * time) +
-                             0.065 * std::exp(-time * 40.0) * std::sin(tau * 3173.0 * time);
-        const double knock = 0.16 * std::exp(-time * 90.0) * std::sin(tau * 157.0 * time);
+        state = state * 1664525U + 1013904223U;
+        const double noise = static_cast<double>(state) / 2147483648.0 - 1;
+        contact += 0.12 * (noise - contact);
+        low += 0.015 * (contact - low);
+        const double attack = 1.0 - std::exp(-time * 2200.0);
+        // A fingertip against water-loaded glass: brief, dull and close to the
+        // ambient level. No long bright panel ring or loud low-frequency slam.
+        const double body = 0.009 * std::exp(-time * 55.0) * std::sin(tau * 220.0 * time);
+        const double glass = 0.002 * std::exp(-time * 120.0) * std::sin(tau * 920.0 * time) +
+                             0.001 * std::exp(-time * 160.0) * std::sin(tau * 1770.0 * time);
+        const double touch = 0.012 * (contact - low) * std::exp(-time * 95.0);
         const double tail = std::min(1.0, static_cast<double>(frames - index - 1) / 256.0);
-        const double value = (body + glass + knock) * attack * tail;
+        const double value = (body + glass + touch) * attack * tail;
         result.stereo[index * 2U] = static_cast<float>(value * left);
         result.stereo[index * 2U + 1U] = static_cast<float>(value * right);
     }

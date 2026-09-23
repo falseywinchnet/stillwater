@@ -36,14 +36,17 @@ open build/Stillwater.app --args --preview --muted
 ```
 
 Launch without `--preview` for desktop placement. Click **◉** in the macOS menu
-bar to open Stillwater's dropdown: pause/resume, sound, desktop taps,
+bar to open Stillwater's dropdown: pause/resume, sound, pointer reactions,
 window/desktop placement, and quit. There is no floating control strip.
-The aquarium's right-click menu exposes the same actions.
+The preview's right-click menu exposes the same actions.
 
 - Click the preview to tap the glass and startle nearby fish.
-- Normal desktop mode passes clicks through to Finder.
-- **Allow desktop taps** temporarily places the aquarium above desktop icons and
-  accepts taps. Uncheck it in the menu bar to restore desktop access.
+- Desktop mode always passes clicks and drags through to Finder, with the aquarium
+  below desktop icons. Moving the pointer near a fish can startle it without
+  capturing clicks; slow movements and a resting pointer leave it calm.
+- **Fish react to pointer** toggles this behavior in either placement. A per-fish
+  cooldown prevents repeated flight restarts, and foreground window bounds suppress
+  reactions while working in another app. No global input monitor is installed.
 - The aquarium never becomes a keyboard target. There are no Escape,
   Space, letter-key, or Command-Q handlers, and no menu keyboard shortcuts.
 - Closing the preview returns it to the desktop.
@@ -134,6 +137,8 @@ ctest --test-dir build-sanitize --output-on-failure
 
 `--capture /absolute/path.png` reads our own Metal render target and saves a PNG.
 `--export-tap file.wav` and `--export-ambience file.wav` export the synthesized audio.
+The ambience export is a 30-second audition; live sound runs continuously, with no
+repeating loop. See [sound, bubbles and interaction notes](docs/ATMOSPHERE.md).
 
 The optional `--aa conv-fast` geometry-coverage experiment and `--aa point`
 control are documented in [CONV_AA.md](docs/CONV_AA.md). Normal launches keep

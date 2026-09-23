@@ -20,9 +20,8 @@ class Audio final {
     static void refill(void* context, AudioQueueRef queue, AudioQueueBufferRef buffer);
     static void tap_finished(void* context, AudioQueueRef queue, AudioQueueBufferRef buffer);
     void fill(AudioQueueBufferRef buffer);
-    Sound ambience_{};
+    Ambience ambience_{};
     Sound tap_sound_{};
-    std::size_t cursor_{};
     AudioQueueRef ambient_queue_{nullptr}, tap_queue_{nullptr};
     std::array<AudioQueueBufferRef, 3> buffers_{};
     AudioQueueBufferRef tap_buffer_{nullptr};
